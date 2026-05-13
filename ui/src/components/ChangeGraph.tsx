@@ -182,6 +182,12 @@ export default function ChangeGraph({
       initialViewState.current = { scale: initialScale, x: initX, y: initY };
       viewState.current = { scale: initialScale, x: initX, y: initY };
       applyTransform();
+
+      if (selectedTaskId) {
+        const node = viewport.querySelector<SVGGElement>(`#task-${selectedTaskId}`);
+        node?.classList.add("graph-node--selected");
+        prevSelectedRef.current = selectedTaskId;
+      }
     }
 
     render().catch((err) => {
@@ -212,7 +218,7 @@ export default function ChangeGraph({
     }
 
     prevSelectedRef.current = selectedTaskId;
-  }, [selectedTaskId]);
+  }, [selectedTaskId, theme]);
 
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if (e.key === "Escape") {

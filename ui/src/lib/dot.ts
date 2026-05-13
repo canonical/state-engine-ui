@@ -29,38 +29,38 @@ function nodeAttrs(status: Status, theme: Theme): string[] {
   if (theme === "light") {
     switch (status) {
       case "done":
-        return ["style=filled", "fillcolor=lightgreen"];
+        return ["style=filled", "fillcolor=lightgreen", 'color="#22c55e"', "penwidth=1.5"];
       case "doing":
-        return ["style=filled", "fillcolor=lightblue"];
+        return ["style=filled", "fillcolor=lightblue", 'color="#3b82f6"', "penwidth=1.5"];
       case "error":
-        return ["style=filled", "fillcolor=mistyrose"];
+        return ["style=filled", "fillcolor=mistyrose", 'color="#ef4444"', "penwidth=1.5"];
       case "undone":
-        return ["style=filled", "fillcolor=moccasin"];
+        return ["style=filled", "fillcolor=moccasin", 'color="#f97316"', "penwidth=1.5"];
       case "wait":
-        return ["style=filled", "fillcolor=lightyellow"];
+        return ["style=filled", "fillcolor=lightyellow", 'color="#f59e0b"', "penwidth=1.5"];
       case "hold":
-        return ["style=filled", "fillcolor=lightgray"];
+        return ["style=filled", "fillcolor=lightgray", 'color="#a1a1aa"', "penwidth=1.5"];
       default:
-        return ["style=filled", "fillcolor=white"];
+        return ["style=filled", "fillcolor=white", 'color="#a1a1aa"', "penwidth=1.5"];
     }
   }
   switch (status) {
     case "done":
-      return ["style=filled", 'fillcolor="#4ade80"'];
+      return ["style=filled", 'fillcolor="#4ade80"', 'color="#86efac"', "penwidth=1.5"];
     case "doing":
-      return ["style=filled", 'fillcolor="#60a5fa"'];
+      return ["style=filled", 'fillcolor="#60a5fa"', 'color="#93c5fd"', "penwidth=1.5"];
     case "error":
-      return ["style=filled", 'fillcolor="#f87171"'];
+      return ["style=filled", 'fillcolor="#f87171"', 'color="#fca5a5"', "penwidth=1.5"];
     case "undone":
-      return ["style=filled", 'fillcolor="#fb923c"'];
+      return ["style=filled", 'fillcolor="#fb923c"', 'color="#fdba74"', "penwidth=1.5"];
     case "wait":
-      return ["style=filled", 'fillcolor="#fbbf24"'];
+      return ["style=filled", 'fillcolor="#fbbf24"', 'color="#fde68a"', "penwidth=1.5"];
     case "hold":
-      return ["style=filled", 'fillcolor="#a1a1aa"'];
+      return ["style=filled", 'fillcolor="#a1a1aa"', 'color="#52525b"', "penwidth=1.5"];
     case "do":
-      return ["style=filled", 'fillcolor="#ffffff"', 'fontcolor=black'];
+      return ["style=filled", 'fillcolor="#ffffff"', 'fontcolor=black', 'color="#52525b"', "penwidth=1.5"];
     default:
-      return ["style=filled", 'fillcolor="#52525b"'];
+      return ["style=filled", 'fillcolor="#52525b"', 'color="#3f3f46"', "penwidth=1.5"];
   }
 }
 
