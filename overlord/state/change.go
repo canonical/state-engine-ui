@@ -632,6 +632,7 @@ func (c *Change) AddTask(t *Task) {
 	}
 	t.change = c.id
 	c.taskIDs = addOnce(c.taskIDs, t.ID())
+	c.state.notifyChangeTaskAddedHandlers(c, t)
 }
 
 // AddAll registers all tasks in the set as required for the state

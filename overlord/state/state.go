@@ -127,8 +127,10 @@ type State struct {
 	pendingChangeByAttr map[string]func(*Change) bool
 
 	// task/changes observing
-	taskHandlers   map[int]func(t *Task, old, new Status) (remove bool)
-	changeHandlers map[int]func(chg *Change, old, new Status)
+	taskHandlers          map[int]func(t *Task, old, new Status) (remove bool)
+	changeHandlers        map[int]func(chg *Change, old, new Status)
+	changeTaskAddedHandlers map[int]func(chg *Change, t *Task)
+	changeRemovedHandlers   map[int]func(chg *Change)
 
 	lockWaitStart int64
 	lockHoldStart int64
@@ -145,9 +147,11 @@ func New(backend Backend) *State {
 		notices:             make(map[noticeKey]*Notice),
 		modified:            true,
 		cache:               make(map[any]any),
-		pendingChangeByAttr: make(map[string]func(*Change) bool),
-		taskHandlers:        make(map[int]func(t *Task, old Status, new Status) bool),
-		changeHandlers:      make(map[int]func(chg *Change, old Status, new Status)),
+		pendingChangeByAttr:    make(map[string]func(*Change) bool),
+		taskHandlers:           make(map[int]func(t *Task, old Status, new Status) bool),
+		changeHandlers:         make(map[int]func(chg *Change, old Status, new Status)),
+		changeTaskAddedHandlers: make(map[int]func(chg *Change, t *Task)),
+		changeRemovedHandlers:   make(map[int]func(chg *Change)),
 	}
 	// The noticeCond.L must be the same as the lock which is held during
 	// WaitNotices, since noticeCond.Wait() will unlock noticeCond.L.
@@ -538,6 +542,7 @@ NextChange:
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
+				s.notifyChangeRemovedHandlers(chg)
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
 				for attr, pending := range s.pendingChangeByAttr {
@@ -552,6 +557,7 @@ NextChange:
 		// change old or we have too many changes
 		if readyTime.Before(pruneLimit) || readyChangesCount > maxReadyChanges {
 			s.writing()
+			s.notifyChangeRemovedHandlers(chg)
 			for _, t := range chg.Tasks() {
 				delete(s.tasks, t.ID())
 			}
@@ -655,6 +661,46 @@ func (s *State) notifyChangeStatusChangedHandlers(chg *Change, old, new Status) 
 	}
 }
 
+func (s *State) AddChangeTaskAddedHandler(f func(chg *Change, t *Task)) (id int) {
+	s.reading()
+	id = s.lastHandlerId
+	s.lastHandlerId++
+	s.changeTaskAddedHandlers[id] = f
+	return id
+}
+
+func (s *State) RemoveChangeTaskAddedHandler(id int) {
+	s.reading()
+	delete(s.changeTaskAddedHandlers, id)
+}
+
+func (s *State) notifyChangeTaskAddedHandlers(chg *Change, t *Task) {
+	s.reading()
+	for _, f := range s.changeTaskAddedHandlers {
+		f(chg, t)
+	}
+}
+
+func (s *State) AddChangeRemovedHandler(f func(chg *Change)) (id int) {
+	s.reading()
+	id = s.lastHandlerId
+	s.lastHandlerId++
+	s.changeRemovedHandlers[id] = f
+	return id
+}
+
+func (s *State) RemoveChangeRemovedHandler(id int) {
+	s.reading()
+	delete(s.changeRemovedHandlers, id)
+}
+
+func (s *State) notifyChangeRemovedHandlers(chg *Change) {
+	s.reading()
+	for _, f := range s.changeRemovedHandlers {
+		f(chg)
+	}
+}
+
 // SaveTimings implements timings.GetSaver
 func (s *State) SaveTimings(timings any) {
 	s.Set("timings", timings)
@@ -677,5 +723,7 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s.pendingChangeByAttr = make(map[string]func(*Change) bool)
 	s.changeHandlers = make(map[int]func(chg *Change, old Status, new Status))
 	s.taskHandlers = make(map[int]func(t *Task, old Status, new Status) bool)
+	s.changeTaskAddedHandlers = make(map[int]func(chg *Change, t *Task))
+	s.changeRemovedHandlers = make(map[int]func(chg *Change))
 	return s, err
 }

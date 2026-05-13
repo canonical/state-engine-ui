@@ -597,6 +597,8 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
 		"pendingChangeByAttr",
 		"taskHandlers",
 		"changeHandlers",
+		"changeTaskAddedHandlers",
+		"changeRemovedHandlers",
 	})
 }
 
