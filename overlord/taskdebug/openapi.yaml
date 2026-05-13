@@ -126,44 +126,6 @@ paths:
                 $ref: "#/components/schemas/ChangeInfo"
         "404":
           description: Change not found
-
-  /api/v1/changes/{changeId}/tasks:
-    get:
-      summary: List tasks under a change
-      operationId: listChangeTasks
-      tags: [Changes]
-      parameters:
-        - $ref: "#/components/parameters/ChangeId"
-      responses:
-        "200":
-          description: Array of tasks belonging to the change
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TaskInfo"
-        "404":
-          description: Change not found
-
-  /api/v1/changes/{changeId}/tasks/{taskId}:
-    get:
-      summary: Get task detail under a change
-      operationId: getChangeTask
-      tags: [Changes]
-      parameters:
-        - $ref: "#/components/parameters/ChangeId"
-        - $ref: "#/components/parameters/TaskId"
-      responses:
-        "200":
-          description: Task detail
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskInfo"
-        "404":
-          description: Change or task not found, or task does not belong to this change
-
   /api/v1/changes/{changeId}/event:
     get:
       summary: SSE stream for a change
@@ -256,38 +218,6 @@ paths:
         "405":
           description: Method not allowed (only POST is accepted)
 
-  /api/v1/tasks:
-    get:
-      summary: List all tasks
-      operationId: listTasks
-      tags: [Tasks]
-      responses:
-        "200":
-          description: Array of all tasks across all changes
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TaskInfo"
-
-  /api/v1/tasks/{taskId}:
-    get:
-      summary: Get task detail
-      operationId: getTask
-      tags: [Tasks]
-      parameters:
-        - $ref: "#/components/parameters/TaskId"
-      responses:
-        "200":
-          description: Task detail
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TaskInfo"
-        "404":
-          description: Task not found
-
 components:
   parameters:
     ChangeId:
@@ -295,13 +225,6 @@ components:
       in: path
       required: true
       description: Change ID
-      schema:
-        type: string
-    TaskId:
-      name: taskId
-      in: path
-      required: true
-      description: Task ID
       schema:
         type: string
 
