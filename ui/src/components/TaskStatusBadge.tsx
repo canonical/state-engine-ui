@@ -1,17 +1,17 @@
 import type { Status } from "../types/state";
 
 const STATUS_STYLES: Record<Status, string> = {
-  default: "bg-gray-100 text-gray-600",
-  hold: "bg-gray-100 text-gray-600",
-  do: "bg-gray-100 text-gray-700",
-  doing: "bg-blue-100 text-blue-800",
-  done: "bg-green-100 text-green-800",
-  abort: "bg-orange-100 text-orange-800",
-  undo: "bg-orange-100 text-orange-800",
-  undoing: "bg-orange-100 text-orange-800",
-  undone: "bg-orange-100 text-orange-800",
-  error: "bg-red-100 text-red-800 font-semibold",
-  wait: "bg-amber-100 text-amber-800",
+  default: "bg-zinc-700 text-zinc-400",
+  hold: "bg-zinc-700 text-zinc-400",
+  do: "bg-zinc-700 text-zinc-300",
+  doing: "bg-blue-400/15 text-blue-400",
+  done: "bg-green-400/15 text-green-400",
+  abort: "bg-orange-400/15 text-orange-400",
+  undo: "bg-orange-400/15 text-orange-400",
+  undoing: "bg-orange-400/15 text-orange-400",
+  undone: "bg-orange-400/15 text-orange-400",
+  error: "bg-red-400/15 text-red-400 font-semibold",
+  wait: "bg-amber-400/15 text-amber-400",
 };
 
 const STATUS_LABELS: Record<Status, string> = {

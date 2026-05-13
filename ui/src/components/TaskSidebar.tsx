@@ -21,11 +21,11 @@ export default function TaskSidebar({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-zinc-200 dark:border-zinc-700 px-4 py-3 bg-zinc-50 dark:bg-zinc-800">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+      <div className="border-b border-zinc-700 px-4 py-3 bg-zinc-800">
+        <h2 className="text-sm font-semibold text-zinc-100">
           {isSingleView ? "Task Details" : "Tasks"}
         </h2>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+        <p className="text-xs text-zinc-400 mt-0.5">
           {isSingleView
             ? `Task ${selectedTaskId}`
             : `${tasks.length} task${tasks.length !== 1 ? "s" : ""}`}
@@ -34,7 +34,7 @@ export default function TaskSidebar({
           <button
             type="button"
             onClick={onClearSelection}
-            className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+            className="mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
             &larr; Back to all tasks
           </button>
