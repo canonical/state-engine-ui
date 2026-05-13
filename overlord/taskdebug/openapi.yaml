@@ -60,6 +60,110 @@ paths:
                 items:
                   $ref: "#/components/schemas/ChangeEntry"
 
+  /api/v1/changes/action:
+    post:
+      summary: Global debugger action
+      description: |
+        Controls the default blocking behavior for all changes that do not
+        have per-change stepping state.
+
+        When the debug server is active, all tasks are blocked by default
+        (global pause). Use global continue to unblock all changes at once.
+
+        Per-change actions (step/continue/pause) always take precedence over
+        the global setting for changes that have per-change state.
+
+        This is a gate-only pause — already-running tasks complete their
+        current handler invocation, but no new tasks start until the gate
+        is opened.
+      operationId: globalAction
+      tags: [Debugger]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [continue, pause]
+              required: [action]
+            examples:
+              continue:
+                summary: Unblock all changes
+                value:
+                  action: continue
+              pause:
+                summary: Block all changes without per-change state
+                value:
+                  action: pause
+      responses:
+        "200":
+          description: Action accepted
+        "400":
+          description: Unknown action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed (only POST is accepted)
+
+  /api/v1/changes/{changeId}:
+    get:
+      summary: Get change detail
+      operationId: getChange
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      responses:
+        "200":
+          description: Change detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeInfo"
+        "404":
+          description: Change not found
+
+  /api/v1/changes/{changeId}/tasks:
+    get:
+      summary: List tasks under a change
+      operationId: listChangeTasks
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      responses:
+        "200":
+          description: Array of tasks belonging to the change
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Change not found
+
+  /api/v1/changes/{changeId}/tasks/{taskId}:
+    get:
+      summary: Get task detail under a change
+      operationId: getChangeTask
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Change or task not found, or task does not belong to this change
+
   /api/v1/changes/{changeId}/event:
     get:
       summary: SSE stream for a change
@@ -152,6 +256,38 @@ paths:
         "405":
           description: Method not allowed (only POST is accepted)
 
+  /api/v1/tasks:
+    get:
+      summary: List all tasks
+      operationId: listTasks
+      tags: [Tasks]
+      responses:
+        "200":
+          description: Array of all tasks across all changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskInfo"
+
+  /api/v1/tasks/{taskId}:
+    get:
+      summary: Get task detail
+      operationId: getTask
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Task not found
+
 components:
   parameters:
     ChangeId:
@@ -159,6 +295,13 @@ components:
       in: path
       required: true
       description: Change ID
+      schema:
+        type: string
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Task ID
       schema:
         type: string
 
@@ -271,8 +414,10 @@ components:
           type: string
         kind:
           type: string
+          description: Change kind, e.g. "install", "remove", "refresh"
         summary:
           type: string
+          description: Human-readable description of the change
         status:
           $ref: "#/components/schemas/ChangeStatus"
         ready:
