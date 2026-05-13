@@ -2,6 +2,8 @@ import type { Change, Status, Task } from "../types/state";
 
 type Theme = "light" | "dark";
 
+const SNAKE_COL_SIZE = 7;
+
 function clusterLabel(lanes: number[]): string {
   return `[${lanes.join(" ")}]`;
 }
@@ -100,6 +102,58 @@ function transitiveReduce(adj: Map<string, string[]>): Map<string, string[]> {
   return result;
 }
 
+function topoSortCluster(tasks: Task[], labels: Map<Task, string>): Task[] {
+  const taskIds = new Set(tasks.map(t => t.id));
+  const taskMap = new Map(tasks.map(t => [t.id, t]));
+  const inDegree = new Map<string, number>();
+  const adj = new Map<string, string[]>();
+
+  for (const t of tasks) {
+    inDegree.set(t.id, 0);
+    adj.set(t.id, []);
+  }
+
+  for (const t of tasks) {
+    for (const waitId of t.waitFor) {
+      if (taskIds.has(waitId)) {
+        adj.get(waitId)!.push(t.id);
+        inDegree.set(t.id, (inDegree.get(t.id) || 0) + 1);
+      }
+    }
+  }
+
+  const queue: Task[] = [];
+  for (const t of tasks) {
+    if (inDegree.get(t.id) === 0) {
+      queue.push(t);
+    }
+  }
+  sortTasks(queue, labels);
+
+  const result: Task[] = [];
+  while (queue.length > 0) {
+    const t = queue.shift()!;
+    result.push(t);
+    const nextTasks: Task[] = [];
+    for (const nextId of adj.get(t.id) || []) {
+      const newDeg = (inDegree.get(nextId) || 1) - 1;
+      inDegree.set(nextId, newDeg);
+      if (newDeg === 0) {
+        nextTasks.push(taskMap.get(nextId)!);
+      }
+    }
+    sortTasks(nextTasks, labels);
+    queue.push(...nextTasks);
+  }
+
+  const resultSet = new Set(result.map(t => t.id));
+  for (const t of tasks) {
+    if (!resultSet.has(t.id)) result.push(t);
+  }
+
+  return result;
+}
+
 export function generateDot(change: Change, theme: Theme = "dark"): string {
   const tasks = [...change.tasks];
   const labels = new Map<Task, string>();
@@ -126,6 +180,27 @@ export function generateDot(change: Change, theme: Theme = "dark"): string {
 
   clusters.sort(lanesLess);
 
+  const clusterColumns = new Map<string, Task[][]>();
+  const taskColumnIdx = new Map<string, number>();
+
+  for (const clu of clusters) {
+    const clulabel = clusterLabel(clu);
+    const cluTasks = clusterTasks.get(clulabel)!;
+    const sorted = topoSortCluster(cluTasks, labels);
+
+    const columns: Task[][] = [];
+    for (let i = 0; i < sorted.length; i += SNAKE_COL_SIZE) {
+      columns.push(sorted.slice(i, i + SNAKE_COL_SIZE));
+    }
+    clusterColumns.set(clulabel, columns);
+
+    for (let colIdx = 0; colIdx < columns.length; colIdx++) {
+      for (const t of columns[colIdx]) {
+        taskColumnIdx.set(t.id, colIdx);
+      }
+    }
+  }
+
   const haltMap = transitiveReduce(
     (() => {
       const m = new Map<string, string[]>();
@@ -146,14 +221,33 @@ export function generateDot(change: Change, theme: Theme = "dark"): string {
 
   for (const clu of clusters) {
     const clulabel = clusterLabel(clu);
+    const columns = clusterColumns.get(clulabel)!;
+
     lines.push(`subgraph "cluster${clulabel}" {`);
     lines.push(`${clusterAttrs(theme)}; tooltip="Lanes: ${clulabel}"`);
+
     for (const t of clusterTasks.get(clulabel)!) {
       const attrs = nodeAttrs(t.status, theme);
       const allAttrs = [`id="task-${t.id}"`, ...attrs];
       const attrStr = ` [${allAttrs.join(", ")}]`;
       lines.push(`  "${labels.get(t)}"${attrStr}`);
     }
+
+    for (let colIdx = 0; colIdx < columns.length; colIdx++) {
+      const col = columns[colIdx];
+      const isOdd = colIdx % 2 === 1;
+
+      const nodeNames = col.map(t => `"${labels.get(t)}"`).join("; ");
+      lines.push(`  {rank=same ${nodeNames}}`);
+
+      const orderedCol = isOdd ? [...col].reverse() : [...col];
+      for (let i = 0; i < orderedCol.length - 1; i++) {
+        lines.push(
+          `  "${labels.get(orderedCol[i])}" -> "${labels.get(orderedCol[i + 1])}" [style=invis, weight=100]`
+        );
+      }
+    }
+
     lines.push("}");
   }
 
@@ -167,9 +261,16 @@ export function generateDot(change: Change, theme: Theme = "dark"): string {
     sortTasks(haltTasks, labels);
 
     for (const t2 of haltTasks) {
+      const sameCluster = taskToCluster.get(t2)! === clu;
+      const sameColumn =
+        sameCluster && taskColumnIdx.get(t.id) === taskColumnIdx.get(t2.id);
+
       let attrs = edgeColor(theme);
-      if (taskToCluster.get(t2)! !== clu) {
+      if (!sameCluster) {
         attrs = "style=bold, " + attrs;
+      }
+      if (sameColumn) {
+        attrs += ", constraint=false";
       }
       const attrStr = ` [${attrs}]`;
       lines.push(`"${labels.get(t)}" -> "${labels.get(t2)}"${attrStr}`);

@@ -154,8 +154,9 @@ export default function ChangeGraph({
       const dot = generateDot(change, theme);
       const svg = viz.renderSVGElement(dot, {
         graphAttributes: {
+          rankdir: "LR",
           nodesep: 0.4,
-          ranksep: 0.8,
+          ranksep: 0.5,
           pad: 0.3,
           bgcolor: "transparent",
           fontcolor: theme === "light" ? "black" : "white",
