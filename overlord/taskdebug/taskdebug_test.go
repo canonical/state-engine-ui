@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -166,10 +167,82 @@ func (s *taskDebugSuite) TestChangesEndpoint(c *C) {
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 
-	var ids []string
+	var entries []map[string]interface{}
 	dec := json.NewDecoder(resp.Body)
-	c.Assert(dec.Decode(&ids), IsNil)
-	c.Assert(ids, DeepEquals, []string{chg.ID()})
+	c.Assert(dec.Decode(&entries), IsNil)
+	c.Assert(len(entries), Equals, 1)
+	c.Assert(entries[0]["id"], Equals, chg.ID())
+	c.Assert(entries[0]["status"], Equals, "Do")
+	c.Assert(entries[0]["ready"], Equals, false)
+}
+
+func (s *taskDebugSuite) TestChangesEndpointFilterSingleStatus(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	chg1 := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg1.AddTask(t1)
+	chg2 := st.NewChange("remove", "remove bar")
+	t2 := st.NewTask("remove-snap", "remove snap bar")
+	chg2.AddTask(t2)
+	t2.SetStatus(state.DoneStatus)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes?status=Done")
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var entries []map[string]interface{}
+	dec := json.NewDecoder(resp.Body)
+	c.Assert(dec.Decode(&entries), IsNil)
+	c.Assert(len(entries), Equals, 1)
+	c.Assert(entries[0]["id"], Equals, chg2.ID())
+	c.Assert(entries[0]["status"], Equals, "Done")
+}
+
+func (s *taskDebugSuite) TestChangesEndpointFilterMultipleStatus(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	chg1 := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg1.AddTask(t1)
+	chg2 := st.NewChange("remove", "remove bar")
+	t2 := st.NewTask("remove-snap", "remove snap bar")
+	chg2.AddTask(t2)
+	t2.SetStatus(state.DoneStatus)
+	chg3 := st.NewChange("refresh", "refresh baz")
+	t3 := st.NewTask("refresh-snap", "refresh snap baz")
+	chg3.AddTask(t3)
+	t3.SetStatus(state.DoingStatus)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes?status=Do,Doing")
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var entries []map[string]interface{}
+	dec := json.NewDecoder(resp.Body)
+	c.Assert(dec.Decode(&entries), IsNil)
+	c.Assert(len(entries), Equals, 2)
+	ids := []string{entries[0]["id"].(string), entries[1]["id"].(string)}
+	sort.Strings(ids)
+	c.Assert(ids, DeepEquals, []string{chg1.ID(), chg3.ID()})
 }
 
 func (s *taskDebugSuite) TestChangeDetail(c *C) {
