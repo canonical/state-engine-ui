@@ -441,19 +441,40 @@ func (m *Manager) handleTaskDetailByID(w http.ResponseWriter, r *http.Request, i
 	writeJSON(w, info)
 }
 
+type changeEntry struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Ready  bool   `json:"ready"`
+}
+
 func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	var filter map[string]bool
+	if vals, ok := r.URL.Query()["status"]; ok && len(vals) > 0 {
+		filter = make(map[string]bool)
+		for _, v := range strings.Split(vals[0], ",") {
+			filter[v] = true
+		}
+	}
 	st := m.state
 	st.Lock()
-	var ids []string
+	var entries []changeEntry
 	for _, chg := range st.Changes() {
-		ids = append(ids, chg.ID())
+		status := visibleStatus(chg.Status())
+		if filter != nil && !filter[status] {
+			continue
+		}
+		entries = append(entries, changeEntry{
+			ID:     chg.ID(),
+			Status: status,
+			Ready:  chg.Status().Ready(),
+		})
 	}
 	st.Unlock()
-	writeJSON(w, ids)
+	writeJSON(w, entries)
 }
 
 func (m *Manager) handleChangeDetailByID(w http.ResponseWriter, r *http.Request, chgID string) {
