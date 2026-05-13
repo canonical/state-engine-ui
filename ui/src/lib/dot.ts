@@ -26,19 +26,19 @@ function sortTasks(tasks: Task[], labels: Map<Task, string>): void {
 function nodeAttrs(status: Status): string[] {
   switch (status) {
     case "done":
-      return ["style=filled", "fillcolor=lightgreen"];
+      return ["style=filled", 'fillcolor="#4ade80"']; // green-400
     case "doing":
-      return ["style=filled", "fillcolor=lightblue"];
+      return ["style=filled", 'fillcolor="#60a5fa"']; // blue-400
     case "error":
-      return ["style=filled", "fillcolor=mistyrose"];
+      return ["style=filled", 'fillcolor="#f87171"']; // red-400
     case "undone":
-      return ["style=filled", "fillcolor=moccasin"];
+      return ["style=filled", 'fillcolor="#fb923c"']; // orange-400
     case "wait":
-      return ["style=filled", "fillcolor=lightyellow"];
+      return ["style=filled", 'fillcolor="#fbbf24"']; // amber-400
     case "hold":
-      return ["style=filled", "fillcolor=lightgray"];
+      return ["style=filled", 'fillcolor="#a1a1aa"']; // zinc-400
     default:
-      return ["style=filled", "fillcolor=white"];
+      return ["style=filled", 'fillcolor="#52525b"']; // zinc-600
   }
 }
 

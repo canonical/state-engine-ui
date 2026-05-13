@@ -23,14 +23,14 @@ export default function TaskMetadataRow({ task }: TaskMetadataRowProps) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <span
-        className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
+        className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2 py-1 text-xs text-zinc-400"
         title={`Spawn: ${task.spawnTime}`}
       >
         🕐 {spawnTime}
       </span>
 
       <span
-        className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
+        className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2 py-1 text-xs text-zinc-400"
         title={task.readyTime ? `Ready: ${task.readyTime}` : "Not ready"}
       >
         ✅ {readyTime}
@@ -38,7 +38,7 @@ export default function TaskMetadataRow({ task }: TaskMetadataRowProps) {
 
       {task.doingTime > 0 && (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
+          className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2 py-1 text-xs text-zinc-400"
           title="Doing duration"
         >
           ⏱ {formatDuration(task.doingTime)}
@@ -47,7 +47,7 @@ export default function TaskMetadataRow({ task }: TaskMetadataRowProps) {
 
       {task.undoingTime > 0 && (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
+          className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2 py-1 text-xs text-zinc-400"
           title="Undoing duration"
         >
           ↩ {formatDuration(task.undoingTime)}
@@ -57,7 +57,7 @@ export default function TaskMetadataRow({ task }: TaskMetadataRowProps) {
       {(task.lanes.length > 1 ||
         (task.lanes.length === 1 && task.lanes[0] !== 0)) && (
         <span
-          className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
+          className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2 py-1 text-xs text-zinc-400"
           title="Execution lane"
         >
           🛤 Lane {task.lanes.join(", ")}
