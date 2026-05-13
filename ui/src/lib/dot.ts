@@ -75,6 +75,31 @@ function edgeColor(theme: Theme): string {
   return theme === "light" ? "color=black" : "color=white";
 }
 
+function transitiveReduce(adj: Map<string, string[]>): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const [u, neighbors] of adj) {
+    const reachable = new Set<string>();
+    const queue = [...neighbors];
+    while (queue.length > 0) {
+      const w = queue.pop()!;
+      const next = adj.get(w);
+      if (next) {
+        for (const x of next) {
+          if (!reachable.has(x)) {
+            reachable.add(x);
+            queue.push(x);
+          }
+        }
+      }
+    }
+    result.set(
+      u,
+      neighbors.filter((v) => !reachable.has(v))
+    );
+  }
+  return result;
+}
+
 export function generateDot(change: Change, theme: Theme = "dark"): string {
   const tasks = [...change.tasks];
   const labels = new Map<Task, string>();
@@ -101,15 +126,20 @@ export function generateDot(change: Change, theme: Theme = "dark"): string {
 
   clusters.sort(lanesLess);
 
-  const haltMap = new Map<string, string[]>();
-  for (const t of change.tasks) {
-    for (const waitId of t.waitFor) {
-      if (!haltMap.has(waitId)) {
-        haltMap.set(waitId, []);
+  const haltMap = transitiveReduce(
+    (() => {
+      const m = new Map<string, string[]>();
+      for (const t of change.tasks) {
+        for (const waitId of t.waitFor) {
+          if (!m.has(waitId)) {
+            m.set(waitId, []);
+          }
+          m.get(waitId)!.push(t.id);
+        }
       }
-      haltMap.get(waitId)!.push(t.id);
-    }
-  }
+      return m;
+    })()
+  );
 
   const lines: string[] = [];
   lines.push("digraph {");
