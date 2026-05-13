@@ -1,5 +1,7 @@
 import type { Change, Status, Task } from "../types/state";
 
+type Theme = "light" | "dark";
+
 function clusterLabel(lanes: number[]): string {
   return `[${lanes.join(" ")}]`;
 }
@@ -23,26 +25,57 @@ function sortTasks(tasks: Task[], labels: Map<Task, string>): void {
   });
 }
 
-function nodeAttrs(status: Status): string[] {
+function nodeAttrs(status: Status, theme: Theme): string[] {
+  if (theme === "light") {
+    switch (status) {
+      case "done":
+        return ["style=filled", "fillcolor=lightgreen"];
+      case "doing":
+        return ["style=filled", "fillcolor=lightblue"];
+      case "error":
+        return ["style=filled", "fillcolor=mistyrose"];
+      case "undone":
+        return ["style=filled", "fillcolor=moccasin"];
+      case "wait":
+        return ["style=filled", "fillcolor=lightyellow"];
+      case "hold":
+        return ["style=filled", "fillcolor=lightgray"];
+      default:
+        return ["style=filled", "fillcolor=white"];
+    }
+  }
   switch (status) {
     case "done":
-      return ["style=filled", 'fillcolor="#4ade80"']; // green-400
+      return ["style=filled", 'fillcolor="#4ade80"'];
     case "doing":
-      return ["style=filled", 'fillcolor="#60a5fa"']; // blue-400
+      return ["style=filled", 'fillcolor="#60a5fa"'];
     case "error":
-      return ["style=filled", 'fillcolor="#f87171"']; // red-400
+      return ["style=filled", 'fillcolor="#f87171"'];
     case "undone":
-      return ["style=filled", 'fillcolor="#fb923c"']; // orange-400
+      return ["style=filled", 'fillcolor="#fb923c"'];
     case "wait":
-      return ["style=filled", 'fillcolor="#fbbf24"']; // amber-400
+      return ["style=filled", 'fillcolor="#fbbf24"'];
     case "hold":
-      return ["style=filled", 'fillcolor="#a1a1aa"']; // zinc-400
+      return ["style=filled", 'fillcolor="#a1a1aa"'];
+    case "do":
+      return ["style=filled", 'fillcolor="#ffffff"', 'fontcolor=black'];
     default:
-      return ["style=filled", 'fillcolor="#52525b"']; // zinc-600
+      return ["style=filled", 'fillcolor="#52525b"'];
   }
 }
 
-export function generateDot(change: Change): string {
+function clusterAttrs(theme: Theme): string {
+  if (theme === "light") {
+    return 'style=filled; fillcolor="#f4f4f5"; fontcolor=black; color=black';
+  }
+  return 'style=filled; fillcolor="#27272a"; fontcolor=white; color=white';
+}
+
+function edgeColor(theme: Theme): string {
+  return theme === "light" ? "color=black" : "color=white";
+}
+
+export function generateDot(change: Change, theme: Theme = "dark"): string {
   const tasks = [...change.tasks];
   const labels = new Map<Task, string>();
 
@@ -84,11 +117,9 @@ export function generateDot(change: Change): string {
   for (const clu of clusters) {
     const clulabel = clusterLabel(clu);
     lines.push(`subgraph "cluster${clulabel}" {`);
-    lines.push(
-      `style=filled; fillcolor="#27272a"; fontcolor=white; color=white; tooltip="Lanes: ${clulabel}"`,
-    );
+    lines.push(`${clusterAttrs(theme)}; tooltip="Lanes: ${clulabel}"`);
     for (const t of clusterTasks.get(clulabel)!) {
-      const attrs = nodeAttrs(t.status);
+      const attrs = nodeAttrs(t.status, theme);
       const allAttrs = [`id="task-${t.id}"`, ...attrs];
       const attrStr = ` [${allAttrs.join(", ")}]`;
       lines.push(`  "${labels.get(t)}"${attrStr}`);
@@ -106,7 +137,7 @@ export function generateDot(change: Change): string {
     sortTasks(haltTasks, labels);
 
     for (const t2 of haltTasks) {
-      let attrs = "color=white";
+      let attrs = edgeColor(theme);
       if (taskToCluster.get(t2)! !== clu) {
         attrs = "style=bold, " + attrs;
       }
