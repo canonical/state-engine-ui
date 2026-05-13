@@ -1,10 +1,10 @@
-import { instance } from '@viz-js/viz'
+import { instance } from "@viz-js/viz";
 
-let vizPromise: ReturnType<typeof instance> | null = null
+let vizPromise: ReturnType<typeof instance> | null = null;
 
 export function getViz() {
   if (!vizPromise) {
-    vizPromise = instance()
+    vizPromise = instance();
   }
-  return vizPromise
+  return vizPromise;
 }

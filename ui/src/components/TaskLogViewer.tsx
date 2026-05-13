@@ -6,7 +6,10 @@ interface TaskLogViewerProps {
   defaultExpanded?: boolean;
 }
 
-export default function TaskLogViewer({ logs, defaultExpanded = false }: TaskLogViewerProps) {
+export default function TaskLogViewer({
+  logs,
+  defaultExpanded = false,
+}: TaskLogViewerProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   if (logs.length === 0) {

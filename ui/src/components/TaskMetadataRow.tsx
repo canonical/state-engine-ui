@@ -54,7 +54,8 @@ export default function TaskMetadataRow({ task }: TaskMetadataRowProps) {
         </span>
       )}
 
-      {(task.lanes.length > 1 || (task.lanes.length === 1 && task.lanes[0] !== 0)) && (
+      {(task.lanes.length > 1 ||
+        (task.lanes.length === 1 && task.lanes[0] !== 0)) && (
         <span
           className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-1 text-xs text-gray-600"
           title="Execution lane"
