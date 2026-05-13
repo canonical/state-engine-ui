@@ -5,7 +5,10 @@ interface TaskProgressBarProps {
   progress: TaskProgress | null;
 }
 
-export default function TaskProgressBar({ status, progress }: TaskProgressBarProps) {
+export default function TaskProgressBar({
+  status,
+  progress,
+}: TaskProgressBarProps) {
   if (status !== "doing") {
     return null;
   }
