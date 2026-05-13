@@ -15,7 +15,7 @@ const TaskItem = memo(function TaskItem({ task, onSelectTask }: TaskItemProps) {
 
   return (
     <div
-      className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-4 shadow-sm mb-3 last:mb-0 cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors"
+      className="rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 p-4 shadow-sm mb-3 last:mb-0 cursor-pointer hover:border-zinc-400 dark:hover:border-zinc-500 transition-colors"
       onClick={() => onSelectTask(task.id)}
     >
       <div className="flex items-center gap-3">

@@ -37,7 +37,7 @@ export default function TaskSidebar({
             <button
               type="button"
               onClick={onClearSelection}
-              className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+              className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-800 dark:hover:text-zinc-100 transition-colors"
             >
               &larr; Back to all tasks
             </button>
