@@ -487,6 +487,16 @@ func (t *Task) Clear(key string) {
 	delete(t.data, key)
 }
 
+// AllData returns a copy of all custom data associated with the task.
+func (t *Task) AllData() map[string]*json.RawMessage {
+	t.state.reading()
+	res := make(map[string]*json.RawMessage, len(t.data))
+	for k, v := range t.data {
+		res[k] = v
+	}
+	return res
+}
+
 func addOnce(set []string, s string) []string {
 	for _, cur := range set {
 		if s == cur {
