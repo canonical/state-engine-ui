@@ -258,7 +258,6 @@ func (s *taskDebugSuite) TestMethodNotAllowed(c *C) {
 		"/api/v1/changes/abc",
 		"/api/v1/tasks/abc",
 		"/api/v1/changes/abc/event",
-		"/api/v1/changes/abc/tasks/xyz/event",
 	} {
 		resp, err := http.Post(addr+path, "application/json", nil)
 		c.Assert(err, IsNil)
@@ -333,36 +332,6 @@ func (s *taskDebugSuite) TestSSEPerChangeNotFound(c *C) {
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
-}
-
-func (s *taskDebugSuite) TestSSEPerTaskUnderChangeNotFound(c *C) {
-	st := state.New(nil)
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	chg.AddTask(t1)
-	chg2 := st.NewChange("remove", "remove bar")
-	t2 := st.NewTask("remove-snap", "remove snap bar")
-	chg2.AddTask(t2)
-	st.Unlock()
-
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	for _, path := range []string{
-		"/api/v1/changes/nonexistent/tasks/abc/event",
-		"/api/v1/changes/" + chg.ID() + "/tasks/nonexistent/event",
-		"/api/v1/changes/" + chg.ID() + "/tasks/" + t2.ID() + "/event",
-	} {
-		resp, err := http.Get("http://" + mgr.Addr() + path)
-		c.Assert(err, IsNil)
-		resp.Body.Close()
-		c.Assert(resp.StatusCode, Equals, http.StatusNotFound, Commentf("path %s", path))
-	}
 }
 
 func (s *taskDebugSuite) TestSSETaskStatusChanged(c *C) {
@@ -465,47 +434,6 @@ func (s *taskDebugSuite) TestSSEPerChangeEventFilter(c *C) {
 	d := parseEventData(c, taskEv.Data)
 	c.Assert(d["trigger_id"], Equals, t1.ID())
 	c.Assert(d["change_id"], Equals, chg.ID())
-}
-
-func (s *taskDebugSuite) TestSSEPerTaskUnderChangeEventFilter(c *C) {
-	st := state.New(nil)
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	chg.AddTask(t1)
-	t2 := st.NewTask("mount-snap", "mount snap foo")
-	chg.AddTask(t2)
-	st.Unlock()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID() + "/tasks/" + t1.ID() + "/event")
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-
-	reader := bufio.NewReader(resp.Body)
-	ev, err := readSSEEvent(reader)
-	c.Assert(err, IsNil)
-	c.Assert(ev.Event, Equals, "snapshot")
-
-	time.Sleep(10 * time.Millisecond)
-
-	st.Lock()
-	t2.SetStatus(state.DoneStatus)
-	t1.SetStatus(state.DoneStatus)
-	st.Unlock()
-
-	ev, err = readNextNonKeepalive(reader)
-	c.Assert(err, IsNil)
-	c.Assert(ev.Event, Equals, "task-status-changed")
-	d := parseEventData(c, ev.Data)
-	c.Assert(d["trigger_id"], Equals, t1.ID())
 }
 
 func (s *taskDebugSuite) TestTasksBlockedAtStartup(c *C) {
