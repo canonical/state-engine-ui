@@ -1,6 +1,7 @@
 import type { Task } from "../types/state";
 import TaskItem from "./TaskItem";
 import TaskList from "./TaskList";
+import TaskDataViewer from "./TaskDataViewer";
 import { useTheme } from "../context/ThemeContext";
 
 interface TaskSidebarProps {
@@ -82,7 +83,10 @@ export default function TaskSidebar({
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         {selectedTask ? (
-          <TaskItem task={selectedTask} onSelectTask={onSelectTask} />
+          <div>
+            <TaskItem task={selectedTask} onSelectTask={onSelectTask} />
+            <TaskDataViewer data={selectedTask.data} />
+          </div>
         ) : (
           <TaskList tasks={tasks} onSelectTask={onSelectTask} />
         )}

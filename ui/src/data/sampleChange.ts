@@ -1,6 +1,7 @@
 import type { Change, Task } from '../types/state'
 
 const tasks: Task[] = [
+<<<<<<< HEAD
   {"id":"84","kind":"prerequisites","summary":"Ensure prerequisites for \"snapd\" are available","status":"done","waitedStatus":"done","clean":false,"progress":null,"data":{},"waitFor":[],"haltTasks":["85","102"],"lanes":[1],"log":[],"change":"3","spawnTime":"2026-05-13T11:18:14.665279188Z","readyTime":"2026-05-13T11:18:15.332051871Z","doingTime":7,"undoingTime":0,"atTime":null},
   {"id":"85","kind":"download-snap","summary":"Download snap \"snapd\" (26865) from channel \"latest/stable\"","status":"done","waitedStatus":"done","clean":false,"progress":{"label":"snapd","done":51654656,"total":51654656},"data":{},"waitFor":["84"],"haltTasks":["86","102"],"lanes":[1],"log":[],"change":"3","spawnTime":"2026-05-13T11:18:14.665744266Z","readyTime":"2026-05-13T11:18:18.727753043Z","doingTime":3234,"undoingTime":0,"atTime":null},
   {"id":"86","kind":"validate-snap","summary":"Fetch and check assertions for snap \"snapd\" (26865)","status":"done","waitedStatus":"done","clean":false,"progress":null,"data":{},"waitFor":["85"],"haltTasks":["87","102"],"lanes":[1],"log":[],"change":"3","spawnTime":"2026-05-13T11:18:14.665769714Z","readyTime":"2026-05-13T11:18:19.140879027Z","doingTime":251,"undoingTime":0,"atTime":null},
@@ -101,6 +102,7 @@ const tasks: Task[] = [
   {"id":"181","kind":"run-hook","summary":"Run configure hook of \"console-conf\" snap if present","status":"do","clean":false,"progress":null,"data":{},"waitFor":["164","165","166","167","168","169","170","171","172","173","174","175","176","177","178","179","180"],"haltTasks":["182"],"lanes":[5],"log":[],"change":"3","spawnTime":"2026-05-13T11:18:14.777982186Z","readyTime":null,"doingTime":0,"undoingTime":0,"atTime":null},
   {"id":"182","kind":"run-hook","summary":"Run health check of \"console-conf\" snap","status":"do","clean":false,"progress":null,"data":{},"waitFor":["164","165","166","167","168","169","170","171","172","173","174","175","176","177","178","179","180","181"],"haltTasks":[],"lanes":[5],"log":[],"change":"3","spawnTime":"2026-05-13T11:18:14.77799395Z","readyTime":null,"doingTime":0,"undoingTime":0,"atTime":null},
   {"id":"183","kind":"check-rerefresh","summary":"Monitoring snaps \"console-conf\", \"core24\", \"pc\", \"pc-kernel\", \"snapd\" to determine whether extra refresh steps are required","status":"wait","waitedStatus":"done","clean":false,"progress":null,"data":{},"waitFor":[],"haltTasks":[],"lanes":[],"log":["2026-05-13T11:19:10Z INFO Task set to wait until a system restart allows to continue"],"change":"3","spawnTime":"2026-05-13T11:18:14.778726314Z","readyTime":null,"doingTime":0,"undoingTime":0,"atTime":null},
+]
 ]
 
 export const sampleChange: Change = {
