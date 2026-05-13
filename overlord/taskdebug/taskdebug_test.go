@@ -74,7 +74,7 @@ func (s *taskDebugSuite) TestTasksEndpoint(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/tasks")
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks")
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
@@ -114,7 +114,7 @@ func (s *taskDebugSuite) TestTaskDetail(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/tasks/" + t1.ID())
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks/" + t1.ID())
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
@@ -135,7 +135,7 @@ func (s *taskDebugSuite) TestTaskDetailNotFound(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/tasks/nonexistent")
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks/nonexistent")
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
@@ -156,7 +156,7 @@ func (s *taskDebugSuite) TestChangesEndpoint(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/changes")
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes")
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
@@ -189,7 +189,7 @@ func (s *taskDebugSuite) TestChangeDetail(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/changes/" + chg.ID())
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID())
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
@@ -209,7 +209,7 @@ func (s *taskDebugSuite) TestChangeDetailNotFound(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/changes/nonexistent")
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/nonexistent")
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
@@ -232,7 +232,7 @@ func (s *taskDebugSuite) TestChangeTasks(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	defer mgr.Stop()
 
-	resp, err := http.Get("http://" + mgr.Addr() + "/changes/" + chg.ID() + "/tasks")
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID() + "/tasks")
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
@@ -254,7 +254,7 @@ func (s *taskDebugSuite) TestMethodNotAllowed(c *C) {
 	defer mgr.Stop()
 
 	addr := "http://" + mgr.Addr()
-	for _, path := range []string{"/tasks", "/changes", "/changes/abc", "/tasks/abc"} {
+	for _, path := range []string{"/api/v1/tasks", "/api/v1/changes", "/api/v1/changes/abc", "/api/v1/tasks/abc"} {
 		resp, err := http.Post(addr+path, "application/json", nil)
 		c.Assert(err, IsNil)
 		resp.Body.Close()
@@ -272,6 +272,6 @@ func (s *taskDebugSuite) TestStop(c *C) {
 	c.Assert(mgr.Addr(), Not(Equals), "")
 	mgr.Stop()
 	// after stop, the server should no longer respond
-	_, err := http.Get("http://" + mgr.Addr() + "/tasks")
+	_, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks")
 	c.Assert(err, NotNil)
 }
