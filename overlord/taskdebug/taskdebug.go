@@ -393,11 +393,12 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 }
 
 type changeEntry struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	Summary string `json:"summary"`
-	Status  string `json:"status"`
-	Ready   bool   `json:"ready"`
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Summary   string    `json:"summary"`
+	Status    string    `json:"status"`
+	Ready     bool      `json:"ready"`
+	SpawnTime time.Time `json:"spawn_time,omitzero"`
 }
 
 func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
@@ -421,11 +422,12 @@ func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		entries = append(entries, changeEntry{
-			ID:      chg.ID(),
-			Kind:    chg.Kind(),
-			Summary: chg.Summary(),
-			Status:  status,
-			Ready:   chg.Status().Ready(),
+			ID:        chg.ID(),
+			Kind:      chg.Kind(),
+			Summary:   chg.Summary(),
+			Status:    status,
+			Ready:     chg.Status().Ready(),
+			SpawnTime: chg.SpawnTime(),
 		})
 	}
 	st.Unlock()

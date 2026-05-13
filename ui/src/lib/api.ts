@@ -62,6 +62,7 @@ export async function fetchChanges(): Promise<ChangeEntry[]> {
     summary: e.summary as string,
     status: mapStatus(e.status as string),
     ready: e.ready as boolean,
+    spawnTime: (e.spawn_time as string) ?? '',
   }))
 }
 

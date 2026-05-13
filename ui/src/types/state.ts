@@ -44,6 +44,7 @@ export interface ChangeEntry {
   summary: string;
   status: Status;
   ready: boolean;
+  spawnTime: string;
 }
 
 export interface Change {

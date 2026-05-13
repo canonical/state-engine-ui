@@ -11,7 +11,7 @@ export function useChangeList(pollMs = 2000) {
   const load = useCallback(async () => {
     try {
       const data = await fetchChanges()
-      setChanges(data)
+      setChanges([...data].sort((a, b) => b.spawnTime.localeCompare(a.spawnTime)))
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

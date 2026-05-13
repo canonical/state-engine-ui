@@ -269,12 +269,20 @@ components:
       properties:
         id:
           type: string
+        kind:
+          type: string
+        summary:
+          type: string
         status:
           $ref: "#/components/schemas/ChangeStatus"
         ready:
           type: boolean
           description: True when the change has reached a terminal status
-      required: [id, status, ready]
+        spawn_time:
+          type: string
+          format: date-time
+          description: Time when the change was created
+      required: [id, kind, summary, status, ready]
 
     ChangeInfo:
       type: object

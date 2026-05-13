@@ -18,8 +18,8 @@ function App() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-zinc-900">
       {showChangeList ? (
-        <div className="w-full p-6 bg-white">
-          <h1 className="text-lg font-bold text-gray-900 mb-4">Changes</h1>
+        <div className="w-full h-full overflow-y-auto p-6 bg-white dark:bg-zinc-900">
+          <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">Changes</h1>
           <ChangeList
             changes={changes}
             selectedId={selectedChangeId}
