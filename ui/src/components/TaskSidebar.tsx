@@ -81,9 +81,9 @@ export default function TaskSidebar({
           )}
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className={`flex-1 min-h-0 p-4 ${isSingleView ? "flex flex-col" : "overflow-y-auto"}`}>
         {selectedTask ? (
-          <div>
+          <div className="flex-1 flex flex-col min-h-0">
             <TaskItem task={selectedTask} onSelectTask={onSelectTask} />
             <TaskDataViewer data={selectedTask.data} />
           </div>
