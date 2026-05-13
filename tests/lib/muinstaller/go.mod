@@ -1,6 +1,6 @@
 module github.com/snapcore/snapd/tests/lib/muinstaller
 
-go 1.18
+go 1.24.0
 
 require github.com/snapcore/snapd v0.0.0-20260108230202-d80cace9d5ed
 
@@ -20,10 +20,10 @@ require (
 	github.com/rogpeppe/go-internal v1.6.1 // indirect
 	github.com/snapcore/go-gettext v0.0.0-20191107141714-82bbea49e785 // indirect
 	github.com/snapcore/secboot v0.0.0-20251204121233-e67750cd7939 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f // indirect
-	golang.org/x/net v0.21.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/retry.v1 v1.0.3 // indirect
