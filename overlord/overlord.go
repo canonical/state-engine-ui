@@ -125,6 +125,7 @@ type Overlord struct {
 	confdbMgr     *confdbstate.ConfdbManager
 	deviceMgmtMgr *devicemgmtstate.DeviceMgmtManager
 	certStateMgr  *certstate.CertManager
+	taskDebugMgr  *taskdebug.Manager
 
 	// proxyConf mediates the http proxy config
 	proxyConf func(req *http.Request) (*url.URL, error)
@@ -219,6 +220,7 @@ func New(restartHandler restart.Handler) (*Overlord, error) {
 	o.addManager(devicemgmtstate.Manager(s, o.runner, deviceMgr))
 
 	o.addManager(taskdebug.NewManager(s))
+	o.taskDebugMgr.SetRunner(o.runner)
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
@@ -265,6 +267,8 @@ func (o *Overlord) addManager(mgr StateManager) {
 		o.deviceMgmtMgr = x
 	case *certstate.CertManager:
 		o.certStateMgr = x
+	case *taskdebug.Manager:
+		o.taskDebugMgr = x
 	}
 	o.stateEng.AddManager(mgr)
 }

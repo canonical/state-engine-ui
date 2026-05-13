@@ -45,6 +45,11 @@ import (
 	"github.com/snapcore/snapd/overlord/state"
 )
 
+type stepState struct {
+	allowNext string
+	continued bool
+}
+
 type Manager struct {
 	state    *state.State
 	addr     string
@@ -60,14 +65,24 @@ type Manager struct {
 	changeRemovedID   int
 
 	keepaliveDone chan struct{}
+
+	runner   *state.TaskRunner
+	stepping map[string]*stepState
 }
 
 func NewManager(st *state.State) *Manager {
 	return &Manager{
-		state: st,
-		addr:  os.Getenv("SNAPD_TASK_DEBUG_ADDR"),
-		hub:   newEventHub(100),
+		state:    st,
+		addr:     os.Getenv("SNAPD_TASK_DEBUG_ADDR"),
+		hub:      newEventHub(100),
+		stepping: make(map[string]*stepState),
 	}
+}
+
+func (m *Manager) SetRunner(r *state.TaskRunner) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runner = r
 }
 
 func (m *Manager) Ensure() error {
@@ -123,6 +138,25 @@ func (m *Manager) Ensure() error {
 		m.hub.publish(sseEvent{Event: "change-removed", Data: snap})
 	})
 	m.state.Unlock()
+
+	if m.runner != nil {
+		m.runner.AddBlocked(func(t *state.Task, running []*state.Task) bool {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			ss, ok := m.stepping[t.Change().ID()]
+			if !ok {
+				return true
+			}
+			if ss.continued {
+				return false
+			}
+			if ss.allowNext == t.ID() {
+				ss.allowNext = ""
+				return false
+			}
+			return true
+		})
+	}
 
 	m.keepaliveDone = make(chan struct{})
 	go m.keepalive()
@@ -325,10 +359,6 @@ func (m *Manager) handleTasksPrefix(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	remainder := strings.TrimPrefix(r.URL.Path, "/api/v1/changes/")
 	if remainder == "" {
 		http.NotFound(w, r)
@@ -337,27 +367,52 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 	segments := strings.Split(remainder, "/")
 	chgID := segments[0]
 
-	st := m.state
-	st.Lock()
-	chg := st.Change(chgID)
-	if chg == nil {
-		st.Unlock()
-		http.NotFound(w, r)
-		return
-	}
-	st.Unlock()
-
 	switch {
 	case len(segments) == 1:
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		m.handleChangeDetailByID(w, r, chgID)
 	case len(segments) == 2 && segments[1] == "event":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		st := m.state
+		st.Lock()
+		if chg := st.Change(chgID); chg == nil {
+			st.Unlock()
+			http.NotFound(w, r)
+			return
+		}
+		st.Unlock()
 		m.serveSSE(w, r, changeEventFilter(chgID))
 	case len(segments) == 2 && segments[1] == "tasks":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		m.handleChangeTasksByID(w, r, chgID)
+	case len(segments) == 2 && segments[1] == "action":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		m.handleAction(w, r, chgID)
 	case len(segments) == 3 && segments[1] == "tasks":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		m.handleTaskDetailByID(w, r, segments[2])
 	case len(segments) == 4 && segments[1] == "tasks" && segments[3] == "event":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		taskID := segments[2]
+		st := m.state
 		st.Lock()
 		t := st.Task(taskID)
 		if t == nil || t.Change().ID() != chgID {
@@ -447,6 +502,117 @@ func (m *Manager) handleChangeTasksByID(w http.ResponseWriter, r *http.Request, 
 	}
 	st.Unlock()
 	writeJSON(w, infos)
+}
+
+func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request, chgID string) {
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "cannot decode request body", http.StatusBadRequest)
+		return
+	}
+
+	switch req.Action {
+	case "step":
+		m.handleStep(w, r, chgID)
+	case "continue":
+		m.handleContinue(w, r, chgID)
+	case "pause":
+		m.handlePause(w, r, chgID)
+	default:
+		writeJSONWithStatus(w, http.StatusBadRequest, map[string]string{"error": "unknown action: " + req.Action})
+	}
+}
+
+func (m *Manager) handleStep(w http.ResponseWriter, r *http.Request, chgID string) {
+	st := m.state
+	st.Lock()
+	chg := st.Change(chgID)
+	if chg == nil {
+		st.Unlock()
+		http.NotFound(w, r)
+		return
+	}
+	nextTask := findNextRunnable(chg)
+	st.Unlock()
+
+	if nextTask == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	m.mu.Lock()
+	if _, ok := m.stepping[chgID]; !ok {
+		m.stepping[chgID] = &stepState{}
+	}
+	ss := m.stepping[chgID]
+	ss.allowNext = nextTask
+	ss.continued = false
+	m.mu.Unlock()
+
+	st.EnsureBefore(0)
+	writeJSON(w, map[string]string{"allowed_task": nextTask})
+}
+
+func (m *Manager) handleContinue(w http.ResponseWriter, r *http.Request, chgID string) {
+	m.mu.Lock()
+	if ss, ok := m.stepping[chgID]; ok {
+		ss.continued = true
+		ss.allowNext = ""
+	} else {
+		m.stepping[chgID] = &stepState{continued: true}
+	}
+	m.mu.Unlock()
+
+	m.state.EnsureBefore(0)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *Manager) handlePause(w http.ResponseWriter, r *http.Request, chgID string) {
+	m.mu.Lock()
+	if ss, ok := m.stepping[chgID]; ok {
+		ss.continued = false
+		ss.allowNext = ""
+	} else {
+		m.stepping[chgID] = &stepState{}
+	}
+	m.mu.Unlock()
+
+	m.state.EnsureBefore(0)
+	w.WriteHeader(http.StatusOK)
+}
+
+func findNextRunnable(chg *state.Change) string {
+	for _, t := range chg.Tasks() {
+		status := t.Status()
+		if status.Ready() || status == state.WaitStatus {
+			continue
+		}
+		if mustWaitTask(t) {
+			continue
+		}
+		return t.ID()
+	}
+	return ""
+}
+
+func mustWaitTask(t *state.Task) bool {
+	switch t.Status() {
+	case state.DoStatus:
+		for _, wt := range t.WaitTasks() {
+			if wt.Status() != state.DoneStatus {
+				return true
+			}
+		}
+	case state.UndoStatus:
+		for _, ht := range t.HaltTasks() {
+			if !ht.Status().Ready() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Manager) serveSSE(w http.ResponseWriter, r *http.Request, filter func(sseEvent) bool) {
@@ -591,6 +757,16 @@ func changeToInfo(chg *state.Change) changeInfo {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		logger.Noticef("cannot encode task debug response: %v", err)
+	}
+}
+
+func writeJSONWithStatus(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
