@@ -66,6 +66,27 @@ export async function fetchChanges(): Promise<ChangeEntry[]> {
   }))
 }
 
+export async function postChangeAction(
+  changeId: string,
+  action: 'step' | 'continue' | 'pause',
+): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/v1/changes/${changeId}/action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action }),
+  })
+  if (res.status === 204) return null
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    const msg = (body as { error?: string } | null)?.error ?? `status ${res.status}`
+    throw new Error(`cannot ${action} change ${changeId}: ${msg}`)
+  }
+  const text = await res.text()
+  if (!text) return null
+  const body = JSON.parse(text) as { allowed_task?: string }
+  return body.allowed_task ?? null
+}
+
 export function connectChangeSSE(
   changeId: string,
   onChange: (change: Change) => void,

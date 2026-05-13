@@ -2,13 +2,16 @@ import { useState } from "react";
 import ChangeGraph from "./components/ChangeGraph";
 import TaskSidebar from "./components/TaskSidebar";
 import ChangeList from "./components/ChangeList";
+import DebuggerControls from "./components/DebuggerControls";
 import { useChange, useChangeList } from "./lib/useChange";
+import { useStepper } from "./lib/useStepper";
 
 function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const { changes, error: listError, loading: listLoading } = useChangeList();
   const { change, error: changeError, loading: changeLoading } = useChange(selectedChangeId);
+  const stepper = useStepper(selectedChangeId, change?.ready ?? false);
 
   const selectedTask =
     change?.tasks.find((t) => t.id === selectedTaskId) ?? null;
@@ -39,6 +42,16 @@ function App() {
               >
                 &larr; Changes
               </button>
+              <DebuggerControls
+                steppingState={stepper.steppingState}
+                stepping={stepper.stepping}
+                noRunnableTasks={stepper.noRunnableTasks}
+                error={stepper.error}
+                changeReady={change?.ready ?? false}
+                onStep={stepper.step}
+                onContinue={stepper.continue}
+                onPause={stepper.pause}
+              />
               <h1 className="text-sm font-semibold text-gray-200">
                 {change ? `${change.kind}: ${change.summary}` : `Change #${selectedChangeId}`}
               </h1>
@@ -51,6 +64,7 @@ function App() {
               <ChangeGraph
                 change={change}
                 selectedTaskId={selectedTaskId}
+                steppingTaskId={stepper.lastSteppedTaskId}
                 onSelectTask={setSelectedTaskId}
               />
             ) : !changeError ? (

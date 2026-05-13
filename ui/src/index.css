@@ -32,3 +32,13 @@ body {
   stroke: #ffffff !important;
   stroke-width: 3 !important;
 }
+
+.graph-node--stepping > ellipse,
+.graph-node--stepping > polygon {
+  animation: step-pulse 1s ease-in-out infinite;
+}
+
+@keyframes step-pulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.3)); }
+  50% { filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)); }
+}

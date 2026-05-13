@@ -1,6 +1,7 @@
-import { useEffect, useEffectEvent, useRef } from "react";
-import type { Change } from "../types/state";
+import { useEffect, useEffectEvent, useMemo, useRef } from "react";
+import type { Change, Status } from "../types/state";
 import { generateDot } from "../lib/dot";
+import { applyNodeStyle } from "../lib/node-style";
 import { getViz } from "../lib/viz";
 import { parseSvgLength } from "../lib/svg-units";
 import { useTheme } from "../context/ThemeContext";
@@ -8,6 +9,7 @@ import { useTheme } from "../context/ThemeContext";
 interface ChangeGraphProps {
   change: Change;
   selectedTaskId: string | null;
+  steppingTaskId: string | null;
   onSelectTask: (id: string | null) => void;
 }
 
@@ -23,17 +25,18 @@ const ZOOM_SENSITIVITY = 0.001;
 export default function ChangeGraph({
   change,
   selectedTaskId,
+  steppingTaskId,
   onSelectTask,
 }: ChangeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewportRef = useRef<SVGGElement | null>(null);
-  const prevSelectedRef = useRef<string | null>(null);
   const viewState = useRef<ViewState>({ scale: 1, x: 0, y: 0 });
   const initialViewState = useRef<ViewState>({ scale: 1, x: 0, y: 0 });
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const svgSize = useRef({ w: 0, h: 0 });
+  const isFirstRender = useRef(true);
   const { theme } = useTheme();
 
   function applyTransform() {
@@ -56,6 +59,90 @@ export default function ChangeGraph({
     const mapped = pt.matrixTransform(inv);
     return { x: mapped.x, y: mapped.y };
   }
+
+  const structuralKey = useMemo(() => {
+    return change.tasks
+      .map(
+        (t) =>
+          `${t.id}\0${t.kind}\0${t.waitFor.slice().sort().join(",")}\0${t.lanes.slice().sort().join(",")}`
+      )
+      .sort()
+      .join("|");
+  }, [change]);
+
+  const statusMap = useMemo(() => {
+    const m = new Map<string, Status>();
+    for (const t of change.tasks) m.set(t.id, t.status);
+    return m;
+  }, [change]);
+
+  const handleNodeClick = useEffectEvent((e: MouseEvent) => {
+    const target = e.target as Element;
+    const nodeG = target.closest<SVGGElement>(".node");
+    if (!nodeG) {
+      onSelectTask(null);
+      return;
+    }
+    const id = nodeG.id;
+    if (id.startsWith("task-")) {
+      onSelectTask(id.slice(5));
+    }
+  });
+
+  const handleWheel = useEffectEvent((e: WheelEvent) => {
+    e.preventDefault();
+    const { scale, x, y } = viewState.current;
+    const delta = -e.deltaY * ZOOM_SENSITIVITY;
+    const factor = 1 + delta;
+    const newScale = Math.max(MIN_SCALE, scale * factor);
+
+    const pt = screenToViewport(e.clientX, e.clientY);
+
+    viewState.current = {
+      scale: newScale,
+      x: x + pt.x * (scale - newScale),
+      y: y + pt.y * (scale - newScale),
+    };
+    applyTransform();
+  });
+
+  const handleMouseDown = useEffectEvent((e: MouseEvent) => {
+    if ((e.target as Element).closest(".node")) return;
+    isDragging.current = true;
+    const s = viewState.current;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    const prevX = s.x;
+    const prevY = s.y;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const ctm = svg.getScreenCTM();
+    svg.style.cursor = "grabbing";
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current || !ctm) return;
+      const dx = (ev.clientX - dragStart.current.x) / ctm.a;
+      const dy = (ev.clientY - dragStart.current.y) / ctm.d;
+      viewState.current.x = prevX + dx;
+      viewState.current.y = prevY + dy;
+      applyTransform();
+    };
+
+    const onUp = () => {
+      isDragging.current = false;
+      if (svgRef.current) svgRef.current.style.cursor = "default";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  });
+
+  const handleDblClick = useEffectEvent(() => {
+    const { scale, x, y } = initialViewState.current;
+    viewState.current = { scale, x, y };
+    applyTransform();
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -98,71 +185,10 @@ export default function ChangeGraph({
         node.style.cursor = "pointer";
       }
 
-      svg.addEventListener("click", (e) => {
-        const target = e.target as Element;
-        const nodeG = target.closest<SVGGElement>(".node");
-        if (!nodeG) {
-          onSelectTask(null);
-          return;
-        }
-        const id = nodeG.id;
-        if (id.startsWith("task-")) {
-          onSelectTask(id.slice(5));
-        }
-      });
-
-      svg.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const { scale, x, y } = viewState.current;
-        const delta = -e.deltaY * ZOOM_SENSITIVITY;
-        const factor = 1 + delta;
-        const newScale = Math.max(MIN_SCALE, scale * factor);
-
-        const pt = screenToViewport(e.clientX, e.clientY);
-
-        viewState.current = {
-          scale: newScale,
-          x: x + pt.x * (scale - newScale),
-          y: y + pt.y * (scale - newScale),
-        };
-        applyTransform();
-      }, { passive: false });
-
-      svg.addEventListener("mousedown", (e) => {
-        if ((e.target as Element).closest(".node")) return;
-        isDragging.current = true;
-        const s = viewState.current;
-        dragStart.current = { x: e.clientX, y: e.clientY };
-        const prevX = s.x;
-        const prevY = s.y;
-        const ctm = svg.getScreenCTM();
-        svg.style.cursor = "grabbing";
-
-        const onMove = (ev: MouseEvent) => {
-          if (!isDragging.current || !ctm) return;
-          const dx = (ev.clientX - dragStart.current.x) / ctm.a;
-          const dy = (ev.clientY - dragStart.current.y) / ctm.d;
-          viewState.current.x = prevX + dx;
-          viewState.current.y = prevY + dy;
-          applyTransform();
-        };
-
-        const onUp = () => {
-          isDragging.current = false;
-          svg.style.cursor = "default";
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-        };
-
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
-      });
-
-      svg.addEventListener("dblclick", () => {
-        const { scale, x, y } = initialViewState.current;
-        viewState.current = { scale, x, y };
-        applyTransform();
-      });
+      svg.addEventListener("click", handleNodeClick);
+      svg.addEventListener("wheel", handleWheel, { passive: false });
+      svg.addEventListener("mousedown", handleMouseDown);
+      svg.addEventListener("dblclick", handleDblClick);
 
       const container = containerRef.current;
       if (!container) return;
@@ -180,14 +206,13 @@ export default function ChangeGraph({
       const initY = h * (1 - initialScale) / 2;
 
       initialViewState.current = { scale: initialScale, x: initX, y: initY };
-      viewState.current = { scale: initialScale, x: initX, y: initY };
-      applyTransform();
 
-      if (selectedTaskId) {
-        const node = viewport.querySelector<SVGGElement>(`#task-${selectedTaskId}`);
-        node?.classList.add("graph-node--selected");
-        prevSelectedRef.current = selectedTaskId;
+      if (isFirstRender.current) {
+        isFirstRender.current = false;
+        viewState.current = { scale: initialScale, x: initX, y: initY };
       }
+
+      applyTransform();
     }
 
     render().catch((err) => {
@@ -198,27 +223,30 @@ export default function ChangeGraph({
 
     return () => {
       cancelled = true;
+      svgRef.current?.removeEventListener("click", handleNodeClick);
+      svgRef.current?.removeEventListener("wheel", handleWheel);
+      svgRef.current?.removeEventListener("mousedown", handleMouseDown);
+      svgRef.current?.removeEventListener("dblclick", handleDblClick);
       svgRef.current = null;
       viewportRef.current = null;
     };
-  }, [change, onSelectTask, theme]);
+  }, [structuralKey, theme]); // eslint-disable-line react-hooks/exhaustive-deps -- change used for generateDot but re-renders are gated by structuralKey
 
   useEffect(() => {
-    const prevId = prevSelectedRef.current;
     const viewport = viewportRef.current;
+    if (!viewport) return;
 
-    if (prevId) {
-      const prevNode = viewport?.querySelector<SVGGElement>(`#task-${prevId}`);
-      prevNode?.classList.remove("graph-node--selected");
+    const nodes = viewport.querySelectorAll<SVGGElement>(".node");
+    for (const node of nodes) {
+      const taskId = node.id.startsWith("task-") ? node.id.slice(5) : null;
+      if (taskId == null) continue;
+      const status = statusMap.get(taskId) ?? "default";
+      applyNodeStyle(node, status, theme);
+
+      node.classList.toggle("graph-node--selected", taskId === selectedTaskId);
+      node.classList.toggle("graph-node--stepping", taskId === steppingTaskId);
     }
-
-    if (selectedTaskId) {
-      const node = viewport?.querySelector<SVGGElement>(`#task-${selectedTaskId}`);
-      node?.classList.add("graph-node--selected");
-    }
-
-    prevSelectedRef.current = selectedTaskId;
-  }, [selectedTaskId, theme]);
+  }, [statusMap, selectedTaskId, steppingTaskId, theme]);
 
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if (e.key === "Escape") {
