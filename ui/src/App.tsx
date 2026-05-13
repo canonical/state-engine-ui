@@ -42,7 +42,7 @@ function App() {
               <h1 className="text-sm font-semibold text-gray-200">
                 {change ? `${change.kind}: ${change.summary}` : `Change #${selectedChangeId}`}
               </h1>
-              {changeLoading && <span className="text-xs text-gray-500">updating...</span>}
+              {changeLoading && <span className="text-xs text-gray-500">connecting...</span>}
             </div>
             {changeError && (
               <p className="text-red-400 text-sm mb-2">{changeError}</p>

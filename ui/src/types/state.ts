@@ -38,9 +38,20 @@ export interface Task {
   atTime: string | null;
 }
 
+export interface ChangeEntry {
+  id: string;
+  kind: string;
+  summary: string;
+  status: Status;
+  ready: boolean;
+}
+
 export interface Change {
   id: string;
   kind: string;
   summary: string;
+  status: Status;
+  ready: boolean;
+  err: string | null;
   tasks: Task[];
 }

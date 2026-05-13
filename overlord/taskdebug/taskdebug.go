@@ -285,6 +285,27 @@ func (m *Manager) buildSnapshot() sseEventData {
 	return snap
 }
 
+func (d sseEventData) filterByChangeID(chgID string) sseEventData {
+	var filtered sseEventData
+	filtered.Trigger = d.Trigger
+	filtered.TriggerID = d.TriggerID
+	filtered.ChangeID = d.ChangeID
+	filtered.OldStatus = d.OldStatus
+	filtered.NewStatus = d.NewStatus
+	for _, chg := range d.Changes {
+		if chg.ID == chgID {
+			filtered.Changes = append(filtered.Changes, chg)
+			break
+		}
+	}
+	for _, t := range d.Tasks {
+		if t.ChangeID == chgID {
+			filtered.Tasks = append(filtered.Tasks, t)
+		}
+	}
+	return filtered
+}
+
 type eventHub struct {
 	mu      sync.Mutex
 	subs    []*subscriber
@@ -386,7 +407,7 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		st.Unlock()
-		m.serveSSE(w, r, changeEventFilter(chgID))
+		m.serveSSE(w, r, changeEventFilter(chgID), chgID)
 	case len(segments) == 2 && segments[1] == "tasks":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -442,9 +463,11 @@ func (m *Manager) handleTaskDetailByID(w http.ResponseWriter, r *http.Request, i
 }
 
 type changeEntry struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	Ready  bool   `json:"ready"`
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Summary string `json:"summary"`
+	Status  string `json:"status"`
+	Ready   bool   `json:"ready"`
 }
 
 func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
@@ -468,9 +491,11 @@ func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		entries = append(entries, changeEntry{
-			ID:     chg.ID(),
-			Status: status,
-			Ready:  chg.Status().Ready(),
+			ID:      chg.ID(),
+			Kind:    chg.Kind(),
+			Summary: chg.Summary(),
+			Status:  status,
+			Ready:   chg.Status().Ready(),
 		})
 	}
 	st.Unlock()
@@ -619,7 +644,7 @@ func mustWaitTask(t *state.Task) bool {
 	return false
 }
 
-func (m *Manager) serveSSE(w http.ResponseWriter, r *http.Request, filter func(sseEvent) bool) {
+func (m *Manager) serveSSE(w http.ResponseWriter, r *http.Request, filter func(sseEvent) bool, chgID string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -637,6 +662,9 @@ func (m *Manager) serveSSE(w http.ResponseWriter, r *http.Request, filter func(s
 	st.Lock()
 	snap := m.buildSnapshot()
 	st.Unlock()
+	if chgID != "" {
+		snap = snap.filterByChangeID(chgID)
+	}
 	snap.Trigger = "snapshot"
 	writeSSEEvent(w, flusher, sseEvent{Event: "snapshot", Data: snap})
 
@@ -645,6 +673,11 @@ func (m *Manager) serveSSE(w http.ResponseWriter, r *http.Request, filter func(s
 		case ev, ok := <-sub.ch:
 			if !ok {
 				return
+			}
+			if chgID != "" {
+				if d, ok := ev.Data.(sseEventData); ok {
+					ev.Data = d.filterByChangeID(chgID)
+				}
 			}
 			writeSSEEvent(w, flusher, ev)
 		case <-r.Context().Done():

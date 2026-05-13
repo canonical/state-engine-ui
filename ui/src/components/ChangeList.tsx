@@ -1,7 +1,8 @@
 import TaskStatusBadge from './TaskStatusBadge'
+import type { ChangeEntry } from '../types/state'
 
 interface ChangeListProps {
-  changes: { id: string; kind: string; summary: string; status: string; ready: boolean; err?: string }[]
+  changes: ChangeEntry[]
   selectedId: string | null
   onSelect: (id: string) => void
   error: string | null
@@ -47,12 +48,11 @@ export default function ChangeList({ changes, selectedId, onSelect, error, loadi
           }`}
         >
           <div className="flex items-center gap-2">
-            <TaskStatusBadge status={c.status.toLowerCase() as 'done'} />
+            <TaskStatusBadge status={c.status} />
             <span className="text-xs font-mono text-gray-500">{c.kind}</span>
             <span className="text-xs text-gray-400 ml-auto">#{c.id}</span>
           </div>
           <p className="mt-1 text-sm font-semibold text-gray-900">{c.summary}</p>
-          {c.err && <p className="mt-1 text-xs text-red-600">{c.err}</p>}
         </button>
       ))}
     </div>

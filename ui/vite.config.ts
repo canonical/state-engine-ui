@@ -12,11 +12,7 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      "/changes": {
-        target: process.env.VITE_TASK_DEBUG_API ?? "http://localhost:4207",
-        changeOrigin: true,
-      },
-      "/tasks": {
+      "/api/v1": {
         target: process.env.VITE_TASK_DEBUG_API ?? "http://localhost:4207",
         changeOrigin: true,
       },

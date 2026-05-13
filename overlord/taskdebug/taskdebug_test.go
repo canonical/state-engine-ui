@@ -172,6 +172,8 @@ func (s *taskDebugSuite) TestChangesEndpoint(c *C) {
 	c.Assert(dec.Decode(&entries), IsNil)
 	c.Assert(len(entries), Equals, 1)
 	c.Assert(entries[0]["id"], Equals, chg.ID())
+	c.Assert(entries[0]["kind"], Equals, "install")
+	c.Assert(entries[0]["summary"], Equals, "install foo")
 	c.Assert(entries[0]["status"], Equals, "Do")
 	c.Assert(entries[0]["ready"], Equals, false)
 }
@@ -387,9 +389,11 @@ func (s *taskDebugSuite) TestSSEPerChangeFilteredSnapshot(c *C) {
 
 	d := parseEventData(c, ev.Data)
 	changes := d["changes"].([]interface{})
-	c.Assert(len(changes), Equals, 2)
+	c.Assert(len(changes), Equals, 1)
+	c.Assert(changes[0].(map[string]interface{})["id"], Equals, chg.ID())
 	tasks := d["tasks"].([]interface{})
-	c.Assert(len(tasks), Equals, 2)
+	c.Assert(len(tasks), Equals, 1)
+	c.Assert(tasks[0].(map[string]interface{})["change_id"], Equals, chg.ID())
 }
 
 func (s *taskDebugSuite) TestSSEPerChangeNotFound(c *C) {
