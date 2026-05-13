@@ -59,3 +59,9 @@
 body {
   margin: 0;
 }
+
+.graph-node--selected > ellipse,
+.graph-node--selected > polygon {
+  stroke: var(--accent) !important;
+  stroke-width: 3 !important;
+}
