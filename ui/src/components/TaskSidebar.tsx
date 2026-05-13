@@ -6,6 +6,7 @@ interface TaskSidebarProps {
   tasks: Task[];
   selectedTaskId: string | null;
   selectedTask: Task | null;
+  onSelectTask: (id: string) => void;
   onClearSelection: () => void;
 }
 
@@ -13,6 +14,7 @@ export default function TaskSidebar({
   tasks,
   selectedTaskId,
   selectedTask,
+  onSelectTask,
   onClearSelection,
 }: TaskSidebarProps) {
   const isSingleView = selectedTaskId !== null;
@@ -39,7 +41,7 @@ export default function TaskSidebar({
         ) : null}
       </div>
       <div className="flex-1 overflow-y-auto p-4">
-        {selectedTask ? <TaskItem task={selectedTask} /> : <TaskList tasks={tasks} />}
+        {selectedTask ? <TaskItem task={selectedTask} onSelectTask={onSelectTask} /> : <TaskList tasks={tasks} onSelectTask={onSelectTask} />}
       </div>
     </div>
   );
