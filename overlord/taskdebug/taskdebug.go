@@ -65,8 +65,9 @@ type Manager struct {
 
 	keepaliveDone chan struct{}
 
-	runner   *state.TaskRunner
-	stepping map[string]*stepState
+	runner     *state.TaskRunner
+	stepping   map[string]*stepState
+	globalFree bool
 }
 
 func NewManager(st *state.State) *Manager {
@@ -92,6 +93,7 @@ func (m *Manager) Ensure() error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/changes", m.handleChanges)
+	mux.HandleFunc("/api/v1/changes/action", m.handleGlobalAction)
 	mux.HandleFunc("/api/v1/changes/", m.handleChangesPrefix)
 	m.server = &http.Server{Addr: m.addr, Handler: mux}
 	lis, err := net.Listen("tcp", m.addr)
@@ -142,7 +144,7 @@ func (m *Manager) Ensure() error {
 			defer m.mu.Unlock()
 			ss, ok := m.stepping[t.Change().ID()]
 			if !ok {
-				return true
+				return !m.globalFree
 			}
 			if ss.continued {
 				return false
@@ -511,6 +513,36 @@ func (m *Manager) handlePause(w http.ResponseWriter, r *http.Request, chgID stri
 
 	m.state.EnsureBefore(0)
 	w.WriteHeader(http.StatusOK)
+}
+
+func (m *Manager) handleGlobalAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "cannot decode request body", http.StatusBadRequest)
+		return
+	}
+
+	switch req.Action {
+	case "continue":
+		m.mu.Lock()
+		m.globalFree = true
+		m.mu.Unlock()
+		m.state.EnsureBefore(0)
+		w.WriteHeader(http.StatusOK)
+	case "pause":
+		m.mu.Lock()
+		m.globalFree = false
+		m.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	default:
+		writeJSONWithStatus(w, http.StatusBadRequest, map[string]string{"error": "unknown action: " + req.Action})
+	}
 }
 
 func findNextRunnable(chg *state.Change) string {
