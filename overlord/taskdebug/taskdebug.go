@@ -61,10 +61,10 @@ func (m *Manager) Ensure() error {
 		return nil
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tasks", m.handleTasks)
-	mux.HandleFunc("/tasks/", m.handleTaskDetail)
-	mux.HandleFunc("/changes", m.handleChanges)
-	mux.HandleFunc("/changes/", m.handleChangeDetail)
+	mux.HandleFunc("/api/v1/tasks", m.handleTasks)
+	mux.HandleFunc("/api/v1/tasks/", m.handleTaskDetail)
+	mux.HandleFunc("/api/v1/changes", m.handleChanges)
+	mux.HandleFunc("/api/v1/changes/", m.handleChangeDetail)
 	m.server = &http.Server{Addr: m.addr, Handler: mux}
 	lis, err := net.Listen("tcp", m.addr)
 	if err != nil {
@@ -168,11 +168,12 @@ func (m *Manager) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Path
-	if len(path) < 8 || path[:7] != "/tasks/" {
+	prefix := "/api/v1/tasks/"
+	if len(path) < len(prefix)+1 || path[:len(prefix)] != prefix {
 		http.NotFound(w, r)
 		return
 	}
-	id := path[7:]
+	id := path[len(prefix):]
 	if id == "" {
 		http.NotFound(w, r)
 		return
@@ -211,11 +212,12 @@ func (m *Manager) handleChangeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := r.URL.Path
-	if len(path) < 10 || path[:9] != "/changes/" {
+	prefix := "/api/v1/changes/"
+	if len(path) < len(prefix)+1 || path[:len(prefix)] != prefix {
 		http.NotFound(w, r)
 		return
 	}
-	remainder := path[9:]
+	remainder := path[len(prefix):]
 	parts := strings.SplitN(remainder, "/", 2)
 	chgID := parts[0]
 	if chgID == "" {
@@ -232,7 +234,7 @@ func (m *Manager) handleChangeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /changes/{id}/tasks
+	// /api/v1/changes/{id}/tasks
 	if len(parts) == 2 && parts[1] == "tasks" {
 		var infos []taskInfo
 		for _, t := range chg.Tasks() {
@@ -243,7 +245,7 @@ func (m *Manager) handleChangeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// /changes/{id}
+	// /api/v1/changes/{id}
 	info := changeToInfo(chg)
 	st.Unlock()
 	writeJSON(w, info)
