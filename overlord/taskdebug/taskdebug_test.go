@@ -21,6 +21,7 @@ package taskdebug_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"time"
 
 	. "gopkg.in/check.v1"
+	"gopkg.in/tomb.v2"
 
 	"github.com/snapcore/snapd/overlord/state"
 	"github.com/snapcore/snapd/overlord/taskdebug"
@@ -263,6 +265,11 @@ func (s *taskDebugSuite) TestMethodNotAllowed(c *C) {
 		resp.Body.Close()
 		c.Assert(resp.StatusCode, Equals, http.StatusMethodNotAllowed, Commentf("path %s", path))
 	}
+
+	resp, err := http.Get(addr + "/api/v1/changes/abc/action")
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusMethodNotAllowed)
 }
 
 func (s *taskDebugSuite) TestStop(c *C) {
@@ -499,6 +506,367 @@ func (s *taskDebugSuite) TestSSEPerTaskUnderChangeEventFilter(c *C) {
 	c.Assert(ev.Event, Equals, "task-status-changed")
 	d := parseEventData(c, ev.Data)
 	c.Assert(d["trigger_id"], Equals, t1.ID())
+}
+
+func (s *taskDebugSuite) TestTasksBlockedAtStartup(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+	done := make(chan struct{})
+	runner.AddHandler("download-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done)
+		return nil
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	runner.Ensure()
+
+	select {
+	case <-done:
+		c.Fatal("task should not have run — tasks must be blocked at startup")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	st.Lock()
+	c.Assert(t1.Status(), Equals, state.DoStatus)
+	st.Unlock()
+}
+
+func (s *taskDebugSuite) TestStepChangeRunsOneTask(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+	runner.AddHandler("download-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done1)
+		return nil
+	}, nil)
+	runner.AddHandler("mount-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done2)
+		return nil
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	t2 := st.NewTask("mount-snap", "mount snap foo")
+	t2.WaitFor(t1)
+	chg.AddTask(t2)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"step"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	var result map[string]string
+	c.Assert(json.NewDecoder(resp.Body).Decode(&result), IsNil)
+	c.Assert(result["allowed_task"], Equals, t1.ID())
+
+	runner.Ensure()
+
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		c.Fatal("first task didn't run after step")
+	}
+
+	select {
+	case <-done2:
+		c.Fatal("second task should not have run yet")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	body = bytes.NewReader([]byte(`{"action":"step"}`))
+	resp2, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp2.Body.Close()
+
+	runner.Ensure()
+
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		c.Fatal("second task didn't run after second step")
+	}
+}
+
+func (s *taskDebugSuite) TestContinueUnblocksAll(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+	runner.AddHandler("download-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done1)
+		return nil
+	}, nil)
+	runner.AddHandler("mount-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done2)
+		return nil
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	t2 := st.NewTask("mount-snap", "mount snap foo")
+	t2.WaitFor(t1)
+	chg.AddTask(t2)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"continue"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	runner.Ensure()
+
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		c.Fatal("first task didn't run after continue")
+	}
+
+	runner.Ensure()
+
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		c.Fatal("second task didn't run after continue")
+	}
+}
+
+func (s *taskDebugSuite) TestPauseReblocksAfterContinue(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+	runner.AddHandler("download-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done1)
+		return nil
+	}, nil)
+	runner.AddHandler("mount-snap", func(t *state.Task, _ *tomb.Tomb) error {
+		close(done2)
+		return nil
+	}, nil)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	t2 := st.NewTask("mount-snap", "mount snap foo")
+	t2.WaitFor(t1)
+	chg.AddTask(t2)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"continue"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	runner.Ensure()
+
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		c.Fatal("first task didn't run")
+	}
+
+	body = bytes.NewReader([]byte(`{"action":"pause"}`))
+	resp, err = http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	runner.Ensure()
+
+	select {
+	case <-done2:
+		c.Fatal("second task should not run after pause")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	body = bytes.NewReader([]byte(`{"action":"continue"}`))
+	resp, err = http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+
+	runner.Ensure()
+
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		c.Fatal("second task didn't run after re-continue")
+	}
+}
+
+func (s *taskDebugSuite) TestStepChangeNotFound(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"step"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/nonexistent/action", "application/json", body)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
+}
+
+func (s *taskDebugSuite) TestStepNoRunnableTasks(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	t1.SetStatus(state.DoneStatus)
+	chg.AddTask(t1)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"step"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusNoContent)
+}
+
+func (s *taskDebugSuite) TestActionMethodNotAllowed(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID() + "/action")
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusMethodNotAllowed)
+}
+
+func (s *taskDebugSuite) TestUnknownAction(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"foobar"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusBadRequest)
+
+	var result map[string]string
+	c.Assert(json.NewDecoder(resp.Body).Decode(&result), IsNil)
+	c.Assert(result["error"], Equals, "unknown action: foobar")
+}
+
+func (s *taskDebugSuite) TestContinueChange(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+
+	st.Lock()
+	chg := st.NewChange("install", "install foo")
+	t1 := st.NewTask("download-snap", "download snap foo")
+	chg.AddTask(t1)
+	st.Unlock()
+
+	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
+	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
+
+	mgr := taskdebug.NewManager(st)
+	mgr.SetRunner(runner)
+	c.Assert(mgr.Ensure(), IsNil)
+	defer mgr.Stop()
+
+	body := bytes.NewReader([]byte(`{"action":"step"}`))
+	resp, err := http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+
+	body = bytes.NewReader([]byte(`{"action":"continue"}`))
+	resp, err = http.Post("http://"+mgr.Addr()+"/api/v1/changes/"+chg.ID()+"/action", "application/json", body)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, Equals, http.StatusOK)
 }
 
 func parseEventData(c *C, raw string) map[string]interface{} {
