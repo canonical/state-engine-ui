@@ -23,9 +23,8 @@
 // interface. The server is disabled by default and can be enabled by setting
 // the SNAPD_TASK_DEBUG_ADDR environment variable.
 //
-// The server provides Server-Sent Events (SSE) endpoints that stream
-// real-time updates for changes and tasks. Two SSE endpoints exist,
-// scoped per-change and per-task (under a change). Every SSE event
+// The server provides a Server-Sent Events (SSE) endpoint that streams
+// real-time updates for changes and tasks under a change. Every SSE event
 // carries the complete list of changes and tasks so that clients can
 // replace their entire state on each event without merging deltas.
 package taskdebug
@@ -406,22 +405,6 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.handleTaskDetailByID(w, r, segments[2])
-	case len(segments) == 4 && segments[1] == "tasks" && segments[3] == "event":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		taskID := segments[2]
-		st := m.state
-		st.Lock()
-		t := st.Task(taskID)
-		if t == nil || t.Change().ID() != chgID {
-			st.Unlock()
-			http.NotFound(w, r)
-			return
-		}
-		st.Unlock()
-		m.serveSSE(w, r, taskEventFilter(chgID, taskID))
 	default:
 		http.NotFound(w, r)
 	}
@@ -677,23 +660,6 @@ func changeEventFilter(chgID string) func(sseEvent) bool {
 				return d.ChangeID == chgID
 			}
 			return d.TriggerID == chgID
-		}
-	}
-}
-
-func taskEventFilter(chgID, taskID string) func(sseEvent) bool {
-	return func(ev sseEvent) bool {
-		switch ev.Event {
-		case "snapshot", "keepalive":
-			return true
-		case "task-status-changed":
-			d, ok := ev.Data.(sseEventData)
-			if !ok {
-				return true
-			}
-			return d.TriggerID == taskID && d.ChangeID == chgID
-		default:
-			return false
 		}
 	}
 }
