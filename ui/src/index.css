@@ -24,11 +24,11 @@ body {
 .graph-node--selected > ellipse,
 .graph-node--selected > polygon {
   stroke: #000000 !important;
-  stroke-width: 4 !important;
+  stroke-width: 3 !important;
 }
 
 .dark .graph-node--selected > ellipse,
 .dark .graph-node--selected > polygon {
   stroke: #ffffff !important;
-  stroke-width: 4 !important;
+  stroke-width: 3 !important;
 }
