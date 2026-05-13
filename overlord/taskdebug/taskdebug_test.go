@@ -61,92 +61,6 @@ func (s *taskDebugSuite) TestServerStarts(c *C) {
 	c.Assert(mgr.Addr(), Not(Equals), "")
 }
 
-func (s *taskDebugSuite) TestTasksEndpoint(c *C) {
-	st := state.New(nil)
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	t1.Set("snap-setup", map[string]string{"name": "foo"})
-	chg.AddTask(t1)
-	t2 := st.NewTask("mount-snap", "mount snap foo")
-	chg.AddTask(t2)
-	t2.WaitFor(t1)
-	st.Unlock()
-
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks")
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-	c.Assert(resp.Header.Get("Content-Type"), Equals, "application/json")
-
-	var tasks []map[string]interface{}
-	dec := json.NewDecoder(resp.Body)
-	c.Assert(dec.Decode(&tasks), IsNil)
-	c.Assert(len(tasks), Equals, 2)
-
-	ids := []string{tasks[0]["id"].(string), tasks[1]["id"].(string)}
-	c.Assert(ids, DeepEquals, []string{t1.ID(), t2.ID()})
-
-	c.Assert(tasks[0]["kind"], Equals, "download-snap")
-	c.Assert(tasks[0]["status"], Equals, "Do")
-	c.Assert(tasks[0]["change_id"], Equals, chg.ID())
-	data := tasks[0]["data"].(map[string]interface{})
-	c.Assert(data["snap-setup"], DeepEquals, map[string]interface{}{"name": "foo"})
-
-	waitTasks := tasks[1]["wait_tasks"].([]interface{})
-	c.Assert(len(waitTasks), Equals, 1)
-	c.Assert(waitTasks[0], Equals, t1.ID())
-}
-
-func (s *taskDebugSuite) TestTaskDetail(c *C) {
-	st := state.New(nil)
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	chg.AddTask(t1)
-	st.Unlock()
-
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks/" + t1.ID())
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-
-	var task map[string]interface{}
-	dec := json.NewDecoder(resp.Body)
-	c.Assert(dec.Decode(&task), IsNil)
-	c.Assert(task["id"], Equals, t1.ID())
-	c.Assert(task["kind"], Equals, "download-snap")
-}
-
-func (s *taskDebugSuite) TestTaskDetailNotFound(c *C) {
-	st := state.New(nil)
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks/nonexistent")
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
-}
-
 func (s *taskDebugSuite) TestChangesEndpoint(c *C) {
 	st := state.New(nil)
 	st.Lock()
@@ -247,76 +161,6 @@ func (s *taskDebugSuite) TestChangesEndpointFilterMultipleStatus(c *C) {
 	c.Assert(ids, DeepEquals, []string{chg1.ID(), chg3.ID()})
 }
 
-func (s *taskDebugSuite) TestChangeDetail(c *C) {
-	st := state.New(nil)
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	chg.AddTask(t1)
-	st.Unlock()
-
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID())
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-
-	var change map[string]interface{}
-	dec := json.NewDecoder(resp.Body)
-	c.Assert(dec.Decode(&change), IsNil)
-	c.Assert(change["id"], Equals, chg.ID())
-}
-
-func (s *taskDebugSuite) TestChangeDetailNotFound(c *C) {
-	st := state.New(nil)
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/nonexistent")
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
-}
-
-func (s *taskDebugSuite) TestChangeTasks(c *C) {
-	st := state.New(nil)
-	st.Lock()
-	chg := st.NewChange("install", "install foo")
-	t1 := st.NewTask("download-snap", "download snap foo")
-	chg.AddTask(t1)
-	t2 := st.NewTask("mount-snap", "mount snap foo")
-	chg.AddTask(t2)
-	st.Unlock()
-
-	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
-	defer os.Unsetenv("SNAPD_TASK_DEBUG_ADDR")
-
-	mgr := taskdebug.NewManager(st)
-	c.Assert(mgr.Ensure(), IsNil)
-	defer mgr.Stop()
-
-	resp, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes/" + chg.ID() + "/tasks")
-	c.Assert(err, IsNil)
-	defer resp.Body.Close()
-	c.Assert(resp.StatusCode, Equals, http.StatusOK)
-
-	var tasks []map[string]interface{}
-	dec := json.NewDecoder(resp.Body)
-	c.Assert(dec.Decode(&tasks), IsNil)
-	c.Assert(len(tasks), Equals, 2)
-	c.Assert(tasks[0]["id"], Equals, t1.ID())
-}
-
 func (s *taskDebugSuite) TestMethodNotAllowed(c *C) {
 	st := state.New(nil)
 	os.Setenv("SNAPD_TASK_DEBUG_ADDR", "127.0.0.1:0")
@@ -328,10 +172,7 @@ func (s *taskDebugSuite) TestMethodNotAllowed(c *C) {
 
 	addr := "http://" + mgr.Addr()
 	for _, path := range []string{
-		"/api/v1/tasks",
 		"/api/v1/changes",
-		"/api/v1/changes/abc",
-		"/api/v1/tasks/abc",
 		"/api/v1/changes/abc/event",
 	} {
 		resp, err := http.Post(addr+path, "application/json", nil)
@@ -355,7 +196,7 @@ func (s *taskDebugSuite) TestStop(c *C) {
 	c.Assert(mgr.Ensure(), IsNil)
 	c.Assert(mgr.Addr(), Not(Equals), "")
 	mgr.Stop()
-	_, err := http.Get("http://" + mgr.Addr() + "/api/v1/tasks")
+	_, err := http.Get("http://" + mgr.Addr() + "/api/v1/changes")
 	c.Assert(err, NotNil)
 }
 

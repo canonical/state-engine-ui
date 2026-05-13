@@ -91,8 +91,6 @@ func (m *Manager) Ensure() error {
 		return nil
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/tasks", m.handleTasks)
-	mux.HandleFunc("/api/v1/tasks/", m.handleTasksPrefix)
 	mux.HandleFunc("/api/v1/changes", m.handleChanges)
 	mux.HandleFunc("/api/v1/changes/", m.handleChangesPrefix)
 	m.server = &http.Server{Addr: m.addr, Handler: mux}
@@ -359,25 +357,6 @@ func (h *eventHub) publish(ev sseEvent) {
 	}
 }
 
-func (m *Manager) handleTasksPrefix(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	path := r.URL.Path
-	prefix := "/api/v1/tasks/"
-	if len(path) < len(prefix)+1 || path[:len(prefix)] != prefix {
-		http.NotFound(w, r)
-		return
-	}
-	id := path[len(prefix):]
-	if id == "" {
-		http.NotFound(w, r)
-		return
-	}
-	m.handleTaskDetailByID(w, r, id)
-}
-
 func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 	remainder := strings.TrimPrefix(r.URL.Path, "/api/v1/changes/")
 	if remainder == "" {
@@ -388,12 +367,6 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 	chgID := segments[0]
 
 	switch {
-	case len(segments) == 1:
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		m.handleChangeDetailByID(w, r, chgID)
 	case len(segments) == 2 && segments[1] == "event":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -408,58 +381,15 @@ func (m *Manager) handleChangesPrefix(w http.ResponseWriter, r *http.Request) {
 		}
 		st.Unlock()
 		m.serveSSE(w, r, changeEventFilter(chgID), chgID)
-	case len(segments) == 2 && segments[1] == "tasks":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		m.handleChangeTasksByID(w, r, chgID)
 	case len(segments) == 2 && segments[1] == "action":
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		m.handleAction(w, r, chgID)
-	case len(segments) == 3 && segments[1] == "tasks":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		m.handleTaskDetailByID(w, r, segments[2])
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-func (m *Manager) handleTasks(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	st := m.state
-	st.Lock()
-	var infos []taskInfo
-	for _, chg := range st.Changes() {
-		for _, t := range chg.Tasks() {
-			infos = append(infos, taskToInfo(t))
-		}
-	}
-	st.Unlock()
-	writeJSON(w, infos)
-}
-
-func (m *Manager) handleTaskDetailByID(w http.ResponseWriter, r *http.Request, id string) {
-	st := m.state
-	st.Lock()
-	t := st.Task(id)
-	if t == nil {
-		st.Unlock()
-		http.NotFound(w, r)
-		return
-	}
-	info := taskToInfo(t)
-	st.Unlock()
-	writeJSON(w, info)
 }
 
 type changeEntry struct {
@@ -500,37 +430,6 @@ func (m *Manager) handleChanges(w http.ResponseWriter, r *http.Request) {
 	}
 	st.Unlock()
 	writeJSON(w, entries)
-}
-
-func (m *Manager) handleChangeDetailByID(w http.ResponseWriter, r *http.Request, chgID string) {
-	st := m.state
-	st.Lock()
-	chg := st.Change(chgID)
-	if chg == nil {
-		st.Unlock()
-		http.NotFound(w, r)
-		return
-	}
-	info := changeToInfo(chg)
-	st.Unlock()
-	writeJSON(w, info)
-}
-
-func (m *Manager) handleChangeTasksByID(w http.ResponseWriter, r *http.Request, chgID string) {
-	st := m.state
-	st.Lock()
-	chg := st.Change(chgID)
-	if chg == nil {
-		st.Unlock()
-		http.NotFound(w, r)
-		return
-	}
-	var infos []taskInfo
-	for _, t := range chg.Tasks() {
-		infos = append(infos, taskToInfo(t))
-	}
-	st.Unlock()
-	writeJSON(w, infos)
 }
 
 func (m *Manager) handleAction(w http.ResponseWriter, r *http.Request, chgID string) {
