@@ -63,6 +63,7 @@ import (
 	_ "github.com/snapcore/snapd/overlord/snapstate/agentnotify"
 	"github.com/snapcore/snapd/overlord/state"
 	"github.com/snapcore/snapd/overlord/storecontext"
+	"github.com/snapcore/snapd/overlord/taskdebug"
 	"github.com/snapcore/snapd/snapdenv"
 	"github.com/snapcore/snapd/store"
 	"github.com/snapcore/snapd/systemd"
@@ -216,6 +217,8 @@ func New(restartHandler restart.Handler) (*Overlord, error) {
 	healthstate.Init(hookMgr)
 
 	o.addManager(devicemgmtstate.Manager(s, o.runner, deviceMgr))
+
+	o.addManager(taskdebug.NewManager(s))
 
 	// the shared task runner should be added last!
 	o.stateEng.AddManager(o.runner)
