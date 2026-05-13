@@ -27,12 +27,16 @@ function nodeAttrs(status: Status): string[] {
   switch (status) {
     case 'done':
       return ['style=filled', 'fillcolor=lightgreen']
+    case 'doing':
+      return ['style=filled', 'fillcolor=lightblue']
     case 'error':
       return ['style=filled', 'fillcolor=mistyrose']
     case 'undone':
       return ['style=filled', 'fillcolor=moccasin']
     case 'wait':
-      return ['style=filled', 'fillcolor=lightblue']
+      return ['style=filled', 'fillcolor=lightyellow']
+    case 'hold':
+      return ['style=filled', 'fillcolor=lightgray']
     default:
       return ['style=filled', 'fillcolor=white']
   }
