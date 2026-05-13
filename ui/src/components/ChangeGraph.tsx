@@ -1,14 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useEffectEvent, useRef } from 'react'
 import type { Change } from '../types/state'
 import { generateDot } from '../lib/dot'
 import { getViz } from '../lib/viz'
 
 interface ChangeGraphProps {
   change: Change
+  selectedTaskId: string | null
+  onSelectTask: (id: string | null) => void
 }
 
-export function ChangeGraph({ change }: ChangeGraphProps) {
+export function ChangeGraph({ change, selectedTaskId, onSelectTask }: ChangeGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const prevSelectedRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -30,10 +34,29 @@ export function ChangeGraph({ change }: ChangeGraphProps) {
       })
       if (cancelled) return
 
+      const nodes = svg.querySelectorAll<SVGGElement>('.node')
+      for (const node of nodes) {
+        node.style.cursor = 'pointer'
+      }
+
+      svg.addEventListener('click', (e) => {
+        const target = e.target as Element
+        const nodeG = target.closest<SVGGElement>('.node')
+        if (!nodeG) {
+          onSelectTask(null)
+          return
+        }
+        const id = nodeG.id
+        if (id.startsWith('task-')) {
+          onSelectTask(id.slice(5))
+        }
+      })
+
       const container = containerRef.current
       if (!container) return
 
       container.replaceChildren(svg)
+      svgRef.current = svg
     }
 
     render().catch((err) => {
@@ -44,8 +67,37 @@ export function ChangeGraph({ change }: ChangeGraphProps) {
 
     return () => {
       cancelled = true
+      svgRef.current = null
     }
-  }, [change])
+  }, [change, onSelectTask])
+
+  useEffect(() => {
+    const prevId = prevSelectedRef.current
+    const svg = svgRef.current
+
+    if (prevId) {
+      const prevNode = svg?.querySelector<SVGGElement>(`#task-${prevId}`)
+      prevNode?.classList.remove('graph-node--selected')
+    }
+
+    if (selectedTaskId) {
+      const node = svg?.querySelector<SVGGElement>(`#task-${selectedTaskId}`)
+      node?.classList.add('graph-node--selected')
+    }
+
+    prevSelectedRef.current = selectedTaskId
+  }, [selectedTaskId])
+
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onSelectTask(null)
+    }
+  })
+
+  useEffect(() => {
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   return (
     <div

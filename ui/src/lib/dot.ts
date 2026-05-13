@@ -88,7 +88,8 @@ export function generateDot(change: Change): string {
     lines.push(`style=filled; fillcolor="#27272a"; fontcolor=white; color=white; tooltip="Lanes: ${clulabel}"`)
     for (const t of clusterTasks.get(clulabel)!) {
       const attrs = nodeAttrs(t.status)
-      const attrStr = attrs.length > 0 ? ` [${attrs.join(', ')}]` : ''
+      const allAttrs = [`id="task-${t.id}"`, ...attrs]
+      const attrStr = ` [${allAttrs.join(', ')}]`
       lines.push(`  "${labels.get(t)}"${attrStr}`)
     }
     lines.push('}')
