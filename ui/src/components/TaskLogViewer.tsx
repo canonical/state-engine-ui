@@ -21,18 +21,21 @@ export default function TaskLogViewer({
       <button
         type="button"
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="text-xs text-zinc-400 hover:text-zinc-300 transition-colors"
+        className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300 transition-colors"
       >
         {isExpanded ? "Hide logs" : `Show logs (${logs.length})`}
       </button>
 
       {isExpanded ? (
-        <div className="mt-2 max-h-48 overflow-y-auto rounded bg-zinc-800 p-3">
+        <div className="mt-2 max-h-48 overflow-y-auto rounded bg-zinc-50 dark:bg-zinc-800 p-3">
           {logs.map((line, index) => {
             const parsed = parseLogLine(line);
             if (!parsed) {
               return (
-                <div key={index} className="font-mono text-xs text-zinc-500">
+                <div
+                  key={index}
+                  className="font-mono text-xs text-zinc-500 dark:text-zinc-400"
+                >
                   {line}
                 </div>
               );
@@ -47,8 +50,8 @@ export default function TaskLogViewer({
                 <span
                   className={
                     parsed.severity === "ERROR"
-                      ? "text-red-400 font-medium"
-                      : "text-zinc-300"
+                      ? "text-red-600 dark:text-red-400 font-medium"
+                      : "text-zinc-700 dark:text-zinc-300"
                   }
                 >
                   {parsed.severity === "ERROR" ? "⚠ " : "ℹ "}

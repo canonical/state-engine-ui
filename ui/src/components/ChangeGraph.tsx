@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useRef } from "react";
 import type { Change } from "../types/state";
 import { generateDot } from "../lib/dot";
 import { getViz } from "../lib/viz";
+import { useTheme } from "../context/ThemeContext";
 
 interface ChangeGraphProps {
   change: Change;
@@ -17,6 +18,7 @@ export default function ChangeGraph({
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const prevSelectedRef = useRef<string | null>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -25,16 +27,16 @@ export default function ChangeGraph({
       const viz = await getViz();
       if (cancelled) return;
 
-      const dot = generateDot(change);
+      const dot = generateDot(change, theme);
       const svg = viz.renderSVGElement(dot, {
         graphAttributes: {
           nodesep: 0.4,
           ranksep: 0.8,
           pad: 0.3,
           bgcolor: "transparent",
-          fontcolor: "white",
+          fontcolor: theme === "light" ? "black" : "white",
         },
-        nodeAttributes: { fontcolor: "white" },
+        nodeAttributes: { fontcolor: theme === "light" ? "black" : "white" },
       });
       if (cancelled) return;
 
@@ -73,7 +75,7 @@ export default function ChangeGraph({
       cancelled = true;
       svgRef.current = null;
     };
-  }, [change, onSelectTask]);
+  }, [change, onSelectTask, theme]);
 
   useEffect(() => {
     const prevId = prevSelectedRef.current;

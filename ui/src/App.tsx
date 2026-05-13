@@ -10,7 +10,7 @@ function App() {
     sampleChange.tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-zinc-900">
+    <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-zinc-900">
       <div className="w-[65%] p-6">
         <ChangeGraph
           change={sampleChange}
@@ -18,7 +18,7 @@ function App() {
           onSelectTask={setSelectedTaskId}
         />
       </div>
-      <div className="w-[35%] border-l border-zinc-700 bg-zinc-900">
+      <div className="w-[35%] border-l border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
         <TaskSidebar
           tasks={sampleChange.tasks}
           selectedTaskId={selectedTaskId}
