@@ -23,6 +23,7 @@ function App() {
           tasks={sampleChange.tasks}
           selectedTaskId={selectedTaskId}
           selectedTask={selectedTask}
+          onSelectTask={setSelectedTaskId}
           onClearSelection={() => setSelectedTaskId(null)}
         />
       </div>
