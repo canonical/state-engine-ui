@@ -1,0 +1,491 @@
+openapi: 3.1.0
+
+info:
+  title: snapd Task Debug API
+  description: |
+    Lightweight HTTP server for debugging the snapd state engine.
+    Shows the status of tasks and changes, including custom data
+    associated with tasks. Disabled by default; enable by setting
+    the SNAPD_TASK_DEBUG_ADDR environment variable.
+
+    When the debug server is active, all tasks are blocked by default.
+    Use the action endpoint to step through tasks one at a time,
+    continue execution, or pause again.
+  version: 1.0.0
+  license:
+    name: GPL-3.0-only
+    url: https://www.gnu.org/licenses/gpl-3.0.txt
+
+servers:
+  - url: http://{host}:{port}
+    description: Set via SNAPD_TASK_DEBUG_ADDR
+    variables:
+      host:
+        default: "127.0.0.1"
+      port:
+        default: "0"
+
+paths:
+  /api/v1/tasks:
+    get:
+      summary: List all tasks
+      operationId: listTasks
+      tags: [Tasks]
+      responses:
+        "200":
+          description: Array of all tasks across all changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskInfo"
+
+  /api/v1/tasks/{taskId}:
+    get:
+      summary: Get task detail
+      operationId: getTask
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Task not found
+
+  /api/v1/changes:
+    get:
+      summary: List changes
+      operationId: listChanges
+      tags: [Changes]
+      parameters:
+        - name: status
+          in: query
+          description: |
+            Comma-separated list of change statuses to include.
+            Omit to return all changes.
+          required: false
+          schema:
+            type: string
+          examples:
+            all:
+              value: ""
+              summary: No filter — return all changes
+            active:
+              value: "Do,Doing"
+              summary: Only changes that are pending or in progress
+            completed:
+              value: "Done"
+              summary: Only completed changes
+      responses:
+        "200":
+          description: Filtered list of changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChangeEntry"
+
+  /api/v1/changes/{changeId}:
+    get:
+      summary: Get change detail
+      operationId: getChange
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      responses:
+        "200":
+          description: Change detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeInfo"
+        "404":
+          description: Change not found
+
+  /api/v1/changes/{changeId}/tasks:
+    get:
+      summary: List tasks under a change
+      operationId: listChangeTasks
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      responses:
+        "200":
+          description: Array of tasks belonging to the change
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Change not found
+
+  /api/v1/changes/{changeId}/tasks/{taskId}:
+    get:
+      summary: Get task detail under a change
+      operationId: getChangeTask
+      tags: [Changes]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskInfo"
+        "404":
+          description: Change or task not found, or task does not belong to this change
+
+  /api/v1/changes/{changeId}/event:
+    get:
+      summary: SSE stream for a change
+      description: |
+        Opens a Server-Sent Events connection that streams real-time
+        updates for the specified change.
+
+        Every event carries a full snapshot of all changes and tasks
+        in the state, so clients can replace their entire local state
+        on each event without merging deltas.
+
+        A keepalive event is sent every 30 seconds.
+
+        The first event is always `snapshot` with the current state.
+      operationId: streamChangeEvent
+      tags: [SSE]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          description: Change not found
+
+  /api/v1/changes/{changeId}/action:
+    post:
+      summary: Debugger action on a change
+      description: |
+        Controls task execution for a change.
+
+        When the debug server is active, all tasks are blocked by default.
+
+        - **step**: Allow the next-runnable task to execute. All other
+          tasks remain blocked. Returns the ID of the allowed task, or
+          204 No Content if no tasks are runnable.
+        - **continue**: Unblock all tasks in the change. They run freely
+          until completion or until paused.
+        - **pause**: Re-block all tasks in the change. Only meaningful
+          after a previous continue.
+      operationId: changeAction
+      tags: [Debugger]
+      parameters:
+        - $ref: "#/components/parameters/ChangeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+            examples:
+              step:
+                summary: Step one task
+                value:
+                  action: step
+              continue:
+                summary: Run all remaining tasks
+                value:
+                  action: continue
+              pause:
+                summary: Re-block tasks
+                value:
+                  action: pause
+      responses:
+        "200":
+          description: Action accepted
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ActionStepResponse"
+                  - type: object
+          x-response-context:
+            step: Returns ActionStepResponse with the allowed task ID
+            continue: Empty 200 response
+            pause: Empty 200 response
+        "204":
+          description: No runnable tasks (step only)
+        "400":
+          description: Unknown action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Change not found
+        "405":
+          description: Method not allowed (only POST is accepted)
+
+components:
+  parameters:
+    ChangeId:
+      name: changeId
+      in: path
+      required: true
+      description: Change ID
+      schema:
+        type: string
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Task ID
+      schema:
+        type: string
+
+  schemas:
+    TaskStatus:
+      type: string
+      enum:
+        - Do
+        - Doing
+        - Done
+        - Undo
+        - Undoing
+        - Undone
+        - Error
+        - Wait
+        - Hold
+        - Abort
+
+    ChangeStatus:
+      type: string
+      enum:
+        - Do
+        - Doing
+        - Done
+        - Undo
+        - Undoing
+        - Undone
+        - Error
+        - Wait
+        - Hold
+        - Abort
+
+    ProgressInfo:
+      type: object
+      properties:
+        label:
+          type: string
+        done:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+      required: [label, done, total]
+
+    TaskInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        change_id:
+          type: string
+        progress:
+          $ref: "#/components/schemas/ProgressInfo"
+        data:
+          type: object
+          additionalProperties: true
+          description: Arbitrary task data keyed by setup key
+        wait_tasks:
+          type: array
+          items:
+            type: string
+          description: IDs of tasks this task must wait for
+        halt_tasks:
+          type: array
+          items:
+            type: string
+          description: IDs of tasks this task must halt for
+        lanes:
+          type: array
+          items:
+            type: integer
+          description: Lane IDs this task belongs to
+        log:
+          type: array
+          items:
+            type: string
+          description: Task log entries
+        spawn_time:
+          type: string
+          format: date-time
+        ready_time:
+          type: string
+          format: date-time
+        at_time:
+          type: string
+          format: date-time
+        doing_time:
+          type: integer
+          description: Nanoseconds spent in Doing status
+        undoing_time:
+          type: integer
+          description: Nanoseconds spent in Undoing status
+        clean:
+          type: boolean
+          description: Whether the task has been cleaned up
+      required: [id, kind, summary, status, progress]
+
+    ChangeEntry:
+      type: object
+      description: Lightweight change listing returned by GET /api/v1/changes
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/ChangeStatus"
+        ready:
+          type: boolean
+          description: True when the change has reached a terminal status
+      required: [id, status, ready]
+
+    ChangeInfo:
+      type: object
+      description: Full change detail returned by GET /api/v1/changes/{changeId}
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        summary:
+          type: string
+        status:
+          $ref: "#/components/schemas/ChangeStatus"
+        ready:
+          type: boolean
+        err:
+          type: string
+          description: Error message if the change is in Error status
+        spawn_time:
+          type: string
+          format: date-time
+        ready_time:
+          type: string
+          format: date-time
+        task_ids:
+          type: array
+          items:
+            type: string
+          description: IDs of all tasks belonging to this change
+      required: [id, kind, summary, status, ready]
+
+    ActionRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [step, continue, pause]
+      required: [action]
+
+    ActionStepResponse:
+      type: object
+      properties:
+        allowed_task:
+          type: string
+          description: ID of the task allowed to run on the next ensure cycle
+      required: [allowed_task]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    SSEEventData:
+      type: object
+      description: |
+        Payload carried by every SSE event. Contains trigger metadata
+        and full snapshots of all changes and tasks.
+      properties:
+        trigger:
+          type: string
+          description: |
+            What caused this event. One of:
+            `snapshot`, `task-status-changed`, `change-status-changed`,
+            `change-task-added`, `change-removed`.
+        trigger_id:
+          type: string
+          description: ID of the entity that triggered the event (change or task ID)
+        change_id:
+          type: string
+          description: |
+            Present for task-status-changed events.
+            ID of the change the triggering task belongs to.
+        old_status:
+          type: string
+          description: Previous status of the triggering entity
+        new_status:
+          type: string
+          description: New status of the triggering entity
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeInfo"
+          description: Full snapshot of all changes
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskInfo"
+          description: Full snapshot of all tasks
+      required: [trigger, changes, tasks]
+
+  x-sse-events:
+    snapshot:
+      description: |
+        Sent immediately upon connection. Contains the full current state.
+      data_schema: "#/components/schemas/SSEEventData"
+      trigger_value: snapshot
+
+    task-status-changed:
+      description: Sent when any task transitions between statuses.
+      data_schema: "#/components/schemas/SSEEventData"
+      trigger_value: task-status-changed
+
+    change-status-changed:
+      description: Sent when any change transitions between statuses.
+      data_schema: "#/components/schemas/SSEEventData"
+      trigger_value: change-status-changed
+
+    change-task-added:
+      description: Sent when a task is added to a change.
+      data_schema: "#/components/schemas/SSEEventData"
+      trigger_value: change-task-added
+
+    change-removed:
+      description: Sent when a change is pruned from the state.
+      data_schema: "#/components/schemas/SSEEventData"
+      trigger_value: change-removed
+
+    keepalive:
+      description: Sent every 30 seconds to keep the connection alive. No data payload.
