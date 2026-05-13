@@ -10,4 +10,16 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      "/changes": {
+        target: process.env.VITE_TASK_DEBUG_API ?? "http://localhost:4207",
+        changeOrigin: true,
+      },
+      "/tasks": {
+        target: process.env.VITE_TASK_DEBUG_API ?? "http://localhost:4207",
+        changeOrigin: true,
+      },
+    },
+  },
 });
